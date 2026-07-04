@@ -1,0 +1,12 @@
+{
+  "files": [],
+  "references": [
+    { "path": "packages/core" },
+    { "path": "packages/frames" },
+    { "path": "packages/orbits" },
+    { "path": "packages/czml" },
+    { "path": "packages/webgpu" },
+    { "path": "packages/benchmarks" },
+    { "path": "packages/validate" }
+  ]
+}

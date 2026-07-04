@@ -1,0 +1,21 @@
+{
+  "name": "dvgl-monorepo",
+  "private": true,
+  "version": "0.0.0",
+  "license": "Apache-2.0",
+  "type": "module",
+  "packageManager": "pnpm@10.12.1",
+  "engines": { "node": ">=24" },
+  "scripts": {
+    "build": "tsc -b tsconfig.json",
+    "typecheck": "pnpm -r --workspace-concurrency=4 run typecheck",
+    "test": "vitest run",
+    "lint": "biome check .",
+    "format": "biome format --write ."
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.0.6",
+    "typescript": "^5.8.3",
+    "vitest": "^3.2.4"
+  }
+}
