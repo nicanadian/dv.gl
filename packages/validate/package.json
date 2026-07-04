@@ -22,5 +22,8 @@
     "@dvgl/core": "workspace:*",
     "@dvgl/frames": "workspace:*",
     "@dvgl/orbits": "workspace:*"
+  },
+  "devDependencies": {
+    "satellite.js": "^5.0.0"
   }
 }

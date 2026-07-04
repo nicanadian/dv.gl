@@ -24,3 +24,5 @@ export const VALIDATION_REGIMES = [
   "invalid_or_decayed_tle",
 ] as const;
 export type ValidationRegime = (typeof VALIDATION_REGIMES)[number];
+
+export * from "./compare.js";

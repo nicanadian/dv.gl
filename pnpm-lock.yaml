@@ -61,6 +61,10 @@ importers:
       '@dvgl/orbits':
         specifier: workspace:*
         version: link:../orbits
+    devDependencies:
+      satellite.js:
+        specifier: ^5.0.0
+        version: 5.0.0
 
   packages/webgpu:
     dependencies:
@@ -546,6 +550,9 @@ packages:
     engines: {node: '>=18.0.0', npm: '>=8.0.0'}
     hasBin: true
 
+  satellite.js@5.0.0:
+    resolution: {integrity: sha512-ie3yiJ2LJAJIhVUKdYhgp7V0btXKAMImDjRnuaNfJGl8rjwP2HwVIh4HLFcpiXYEiYwXc5fqh5+yZqCe6KIwWw==}
+
   siginfo@2.0.0:
     resolution: {integrity: sha512-ybx0WO1/8bSBLEWXZvEd7gMW3Sn3JFlW3TvX1nREbDLRNQNaeNN8WK0meBwPdAaOI7TtRRRJn/Es1zhrrCHu7g==}
 
@@ -1030,6 +1037,8 @@ snapshots:
       '@rollup/rollup-win32-x64-gnu': 4.62.2
       '@rollup/rollup-win32-x64-msvc': 4.62.2
       fsevents: 2.3.3
+
+  satellite.js@5.0.0: {}
 
   siginfo@2.0.0: {}
 

@@ -26,3 +26,6 @@ export const BENCHMARK_METRICS = [
   "scrub_to_frame_latency_ms",
 ] as const;
 export type BenchmarkMetric = (typeof BENCHMARK_METRICS)[number];
+
+export * from "./metrics.js";
+export * from "./scenario.js";
