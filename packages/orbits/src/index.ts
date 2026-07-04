@@ -17,3 +17,6 @@
 /** Pre-alpha placeholder for the ingestion surface. */
 export const SUPPORTED_INGEST_FORMATS = ["TLE", "OMM", "OEM"] as const;
 export type IngestFormat = (typeof SUPPORTED_INGEST_FORMATS)[number];
+
+export * from "./catalog.js";
+export * from "./propagation.js";

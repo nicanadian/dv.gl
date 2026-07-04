@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>dv.gl Stage 0 bench runner</title>
+  </head>
+  <body style="font-family: system-ui; background: #0a0a12; color: #dde">
+    <h1>dv.gl Stage 0 bench runner</h1>
+    <p>Same catalog, same propagation source, same scripted camera and scrub pattern
+       on both paths (see docs/benchmark-fairness.md). Each page runs the 60 s script
+       and downloads a results JSON.</p>
+    <ul>
+      <li><a href="./composed.html">Path 1: composed (CesiumJS)</a></li>
+      <li><a href="./cleansheet.html">Path 2: clean-sheet (@dvgl/webgpu)</a></li>
+    </ul>
+    <p>Protocol: 1 warmup pass (discard) + 3 measured passes per path, reload between
+       passes, report the median. Requires WebGPU for path 2 (chrome://gpu).</p>
+  </body>
+</html>

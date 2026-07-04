@@ -87,6 +87,25 @@ established headless first (`@dvgl/validate`): python-sgp4 (Vallado, fp64) fixtu
 cross-checked against satellite.js (Vallado, fp64) so the JS-side reference is itself
 validated before any GPU comparison. The full regime matrix is v0.1 work, not Stage 0.
 
+## Amendments
+
+Dated changes made before any results were published:
+
+- **2026-07-04 (pre-results), propagation source:** the v0 runner uses a single
+  shared `SatelliteJsSource` (CPU, fp64 Vallado) on BOTH paths instead of sgp4.gl.
+  Fairness is preserved (identical source, identical buffers) and the comparison
+  isolates scene architecture — which is what the gate measures. sgp4.gl swaps in
+  behind the same `PropagationSource` interface later; results must name the source
+  used.
+- **2026-07-04 (pre-results), clean-sheet host:** the v0 clean-sheet page hosts the
+  @dvgl/webgpu hot path in a minimal raw-WebGPU canvas (no framework) rather than a
+  Three.js WebGPU scene. The Three-hosted variant is a separate friction experiment,
+  not a prerequisite for the latency gate.
+- **2026-07-04 (pre-results), globe boundary:** the v0 runner takes the second
+  branch of the globe-cost boundary in its strictest form — the globe pass is
+  disabled on both paths (Cesium `globe.show = false`; clean-sheet renders points
+  only). A globe-on variant can be added later under the identical-ellipsoid rule.
+
 ## Publication
 
 The harness, scenario definition, catalog checksum, pinned dependency commits, raw

@@ -9,7 +9,7 @@
     "node": ">=24"
   },
   "scripts": {
-    "build": "tsc -b tsconfig.json",
+    "build": "tsc -b tsconfig.json && pnpm --filter @dvgl/bench-runner build",
     "typecheck": "pnpm -r --workspace-concurrency=4 run typecheck",
     "test": "vitest run",
     "lint": "biome check .",

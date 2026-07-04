@@ -1,0 +1,11 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": false,
+    "noEmit": true,
+    "types": ["@webgpu/types", "vite/client"],
+    "moduleResolution": "bundler",
+    "module": "ESNext"
+  },
+  "include": ["src", "vite.config.ts"]
+}
