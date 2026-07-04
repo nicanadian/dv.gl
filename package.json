@@ -5,7 +5,9 @@
   "license": "Apache-2.0",
   "type": "module",
   "packageManager": "pnpm@10.12.1",
-  "engines": { "node": ">=24" },
+  "engines": {
+    "node": ">=24"
+  },
   "scripts": {
     "build": "tsc -b tsconfig.json",
     "typecheck": "pnpm -r --workspace-concurrency=4 run typecheck",
