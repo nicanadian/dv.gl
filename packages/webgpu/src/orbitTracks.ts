@@ -18,8 +18,8 @@
  * Orbit tracks: the operator product. Each object's actual path over +/- one
  * orbital period around the CURRENT scene time, computed from the dynamics (the
  * propagation source's sampleWindowInto), independent of frame rate and playback
- * speed. Past half renders solid with a ramp toward "now"; future half renders in
- * the operator-conventional dashed style (sample-parity alpha).
+ * speed. Past rev and next rev are both SOLID lines differing by color only --
+ * no fades, no dashes: a track is a precise line.
  *
  * Contrast with TrailRenderer, which is a motion-history EFFECT (recent epoch
  * snapshots) -- useful as a visual cue on dense catalogs, meaningless as a
@@ -55,27 +55,19 @@ fn vs(@builtin(vertex_index) s : u32, @builtin(instance_index) i : u32) -> VsOut
   var out : VsOut;
   out.clip = cam.viewProjRte * vec4<f32>(rel, 1.0);
 
+  // no fades, no dashes: a track is a precise line. past rev and next rev are
+  // both solid; they differ by COLOR only.
   let mid = f32(samples - 1u) * 0.5;
-  let fs = f32(s);
-  if (fs <= mid) {
-    // past: ramp from 0.25 at -1 period up to 0.85 at "now"
-    out.alpha = 0.25 + 0.6 * (fs / mid);
-    out.future = 0.0;
-  } else {
-    // future: dashed (sample parity), fading toward +1 period
-    let u = (fs - mid) / mid;
-    let dash = f32((s / 2u) % 2u);
-    out.alpha = (0.55 - 0.35 * u) * dash;
-    out.future = 1.0;
-  }
+  out.alpha = 0.9;
+  out.future = select(0.0, 1.0, f32(s) > mid);
   return out;
 }
 
 @fragment
 fn fs(in : VsOut) -> @location(0) vec4<f32> {
-  // past: the catalog cyan; future: amber, the conventional "planned" tint
-  let past = vec3<f32>(0.45, 0.75, 0.95);
-  let fut  = vec3<f32>(0.95, 0.75, 0.35);
+  // past rev: catalog cyan. next rev: amber. both solid.
+  let past = vec3<f32>(0.55, 0.80, 1.00);
+  let fut  = vec3<f32>(1.00, 0.72, 0.30);
   let c = mix(past, fut, in.future) * in.alpha;
   return vec4<f32>(c, in.alpha);
 }
@@ -194,6 +186,12 @@ export class OrbitTrackRenderer {
     if (this.count === 0) return;
     pass.setPipeline(this.pipeline);
     pass.setBindGroup(0, this.bindGroup);
-    pass.draw(this.samples, this.count);
+    // Near-circular orbits overlap themselves: past rev and next rev share the
+    // same ring in space. Draw the future half FIRST and the past half ON TOP,
+    // so the solid past orbit always reads, and amber shows exactly where the
+    // next rev genuinely deviates from it.
+    const half = (this.samples - 1) / 2;
+    pass.draw(this.samples - half, this.count, half); // future: mid..end
+    pass.draw(half + 1, this.count, 0); // past: start..mid, on top
   }
 }
