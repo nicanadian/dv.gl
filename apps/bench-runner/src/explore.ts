@@ -19,7 +19,9 @@
  * wheel zoom, a scrubbable 7-day timeline, and play/pause. NOT a benchmark page --
  * no metrics, input is yours. This is the seed of the actual product demo.
  */
+import { MissionClock } from "@dvgl/core";
 import { PointRenderer } from "@dvgl/webgpu";
+import { catalogEpochMs, parseCatalog } from "@dvgl/orbits";
 import { loadCatalogText, makeSource, readVariant } from "./sources.js";
 
 // ---- minimal mat4 (same as cleansheet) ----
@@ -121,9 +123,15 @@ async function main(): Promise<void> {
     let renderer: PointRenderer | undefined;
 
     const view: View = { lonDeg: -75, latDeg: 25, rangeKm: 45_000 };
-    let sceneMinutes = 0;
-    let playing = true;
-    let speed = 60; // scene-seconds per wall-second
+
+    // @dvgl/core's first consumer: the MissionClock owns play state, rate, looping,
+    // and the scene-time axis; the page just feeds it wall deltas and reads it.
+    const clock = new MissionClock({
+      epochMs: catalogEpochMs(parseCatalog(catalog.text).objects) ?? 0,
+      windowSeconds: WINDOW_MINUTES * 60,
+      rate: 600,
+    });
+    clock.play();
     let dirty = true;
 
     // async propagation: latest-wins coalescing lives in the source; the render
@@ -171,22 +179,23 @@ async function main(): Promise<void> {
       { passive: false },
     );
 
-    // timeline controls
+    // timeline controls, all delegated to the MissionClock
     const slider = document.getElementById("time") as HTMLInputElement;
     const playBtn = document.getElementById("play") as HTMLButtonElement;
     const speedSel = document.getElementById("speed") as HTMLSelectElement;
     slider.addEventListener("input", () => {
-      sceneMinutes = Number(slider.value);
-      playing = false;
+      clock.scrubTo(Number(slider.value) * 60);
+      clock.pause();
       playBtn.textContent = "play";
       dirty = true;
     });
     playBtn.addEventListener("click", () => {
-      playing = !playing;
-      playBtn.textContent = playing ? "pause" : "play";
+      if (clock.playing) clock.pause();
+      else clock.play();
+      playBtn.textContent = clock.playing ? "pause" : "play";
     });
     speedSel.addEventListener("change", () => {
-      speed = Number(speedSel.value);
+      clock.rate = Number(speedSel.value);
     });
 
     let lastT = performance.now();
@@ -195,13 +204,13 @@ async function main(): Promise<void> {
       const dt = (now - lastT) / 1000;
       lastT = now;
 
-      if (playing) {
-        sceneMinutes = (sceneMinutes + (dt * speed) / 60) % WINDOW_MINUTES;
-        slider.value = String(Math.floor(sceneMinutes));
+      if (clock.playing) {
+        clock.advance(dt);
+        slider.value = String(Math.floor(clock.currentSeconds / 60));
         dirty = true;
       }
       if (dirty) {
-        source.request(sceneMinutes);
+        source.request(clock.currentSeconds / 60);
         dirty = false;
       }
 

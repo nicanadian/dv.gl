@@ -14,10 +14,6 @@
  * limitations under the License.
  */
 
-export interface MissionClockStub {
-  /** Seconds since the scene epoch. Placeholder for the deterministic clock. */
-  readonly currentTimeSeconds: number;
-}
-
-/** Pre-alpha placeholder. The real deterministic clock/timeline lands in v0.1. */
-export const MissionClock: MissionClockStub = { currentTimeSeconds: 0 };
+export * from "./clock.js";
+export * from "./intervals.js";
+export * from "./track.js";

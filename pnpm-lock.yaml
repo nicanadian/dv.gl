@@ -23,6 +23,9 @@ importers:
       '@dvgl/benchmarks':
         specifier: workspace:*
         version: link:../../packages/benchmarks
+      '@dvgl/core':
+        specifier: workspace:*
+        version: link:../../packages/core
       '@dvgl/orbits':
         specifier: workspace:*
         version: link:../../packages/orbits
