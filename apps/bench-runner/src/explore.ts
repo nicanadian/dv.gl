@@ -21,7 +21,7 @@
  */
 import { MissionClock } from "@dvgl/core";
 import { gmst } from "@dvgl/frames";
-import { PointRenderer } from "@dvgl/webgpu";
+import { PointRenderer, TrailRenderer } from "@dvgl/webgpu";
 import { catalogEpochMs, parseCatalog } from "@dvgl/orbits";
 import { loadCatalogText, makeSource, readVariant } from "./sources.js";
 
@@ -122,6 +122,7 @@ async function main(): Promise<void> {
     const catalog = await loadCatalogText();
     const source = await makeSource(mode, catalog.text, multiplier);
     let renderer: PointRenderer | undefined;
+    let trails: TrailRenderer | undefined;
 
     const view: View = { lonDeg: -75, latDeg: 25, rangeKm: 45_000 };
 
@@ -141,6 +142,10 @@ async function main(): Promise<void> {
     source.onResult = (positions, minutes, failed) => {
       renderer ??= new PointRenderer(device, { capacity: source.count, format });
       renderer.updatePositions(positions, source.count);
+      if (trailsBox.checked) {
+        trails ??= new TrailRenderer(device, { capacity: source.count, format });
+        trails.push(positions, source.count);
+      }
       const d = Math.floor(minutes / 1440);
       const h = Math.floor((minutes % 1440) / 60);
       const m = Math.floor(minutes % 60);
@@ -188,6 +193,7 @@ async function main(): Promise<void> {
       clock.scrubTo(Number(slider.value) * 60);
       clock.pause();
       playBtn.textContent = "play";
+      trails?.reset(); // discontinuity: the trail regrows from here
       dirty = true;
     });
     playBtn.addEventListener("click", () => {
@@ -199,6 +205,8 @@ async function main(): Promise<void> {
       clock.rate = Number(speedSel.value);
     });
     const ecefBox = document.getElementById("ecef") as HTMLInputElement;
+    const trailsBox = document.getElementById("trails") as HTMLInputElement;
+    trailsBox.addEventListener("change", () => trails?.reset());
 
     let lastT = performance.now();
     const tick = (): void => {
@@ -221,7 +229,9 @@ async function main(): Promise<void> {
       const gmstDeg = ecefBox.checked ? (gmst(clock.currentUnixMs()) * 180) / Math.PI : 0;
       const eye = eyeFrom({ ...view, lonDeg: view.lonDeg + gmstDeg });
       const proj = perspective((50 * Math.PI) / 180, canvas.width / canvas.height, 10, 500_000);
-      renderer?.updateCamera(mul(proj, lookAtRte(eye)), eye, canvas.width, canvas.height);
+      const viewProjRte = mul(proj, lookAtRte(eye));
+      renderer?.updateCamera(viewProjRte, eye, canvas.width, canvas.height);
+      if (trailsBox.checked) trails?.updateCamera(viewProjRte, eye);
 
       const encoder = device.createCommandEncoder();
       const pass = encoder.beginRenderPass({
@@ -234,6 +244,7 @@ async function main(): Promise<void> {
           },
         ],
       });
+      if (trailsBox.checked) trails?.draw(pass); // under the points
       renderer?.draw(pass);
       pass.end();
       device.queue.submit([encoder.finish()]);

@@ -22,7 +22,7 @@
  *
  * Stage 0 scope only: points, RTE, clock, scrub. No picking, labels, trails, volumes.
  */
-import { packRte } from "./rte.js";
+import { packSplit3To4 } from "./rte.js";
 
 /** WGSL for instanced point sprites with relative-to-eye precision. */
 export const POINTS_WGSL = /* wgsl */ `
@@ -158,20 +158,12 @@ export class PointRenderer {
    * Non-finite entries (failed propagation) are pushed far behind the far plane.
    */
   updatePositions(positionsKm: Float32Array, count: number): void {
-    const n = Math.min(count, this.capacity);
-    for (let k = 0; k < n; k += 1) {
-      const src = k * 3;
-      const dst = k * 4;
-      for (let c = 0; c < 3; c += 1) {
-        const v = positionsKm[src + c];
-        const x = v !== undefined && Number.isFinite(v) ? v : 1e12;
-        const h = Math.fround(x);
-        this.highStage[dst + c] = h;
-        this.lowStage[dst + c] = Math.fround(x - h);
-      }
-      this.highStage[dst + 3] = 0;
-      this.lowStage[dst + 3] = 0;
-    }
+    const n = packSplit3To4(
+      positionsKm,
+      Math.min(count, this.capacity),
+      this.highStage,
+      this.lowStage,
+    );
     this.count = n;
     this.device.queue.writeBuffer(this.highBuf, 0, this.highStage, 0, n * 4);
     this.device.queue.writeBuffer(this.lowBuf, 0, this.lowStage, 0, n * 4);
@@ -204,5 +196,3 @@ export class PointRenderer {
     pass.draw(6, this.count);
   }
 }
-
-export { packRte };

@@ -62,6 +62,37 @@ export function combineSplit(high: number, low: number): number {
 }
 
 /**
+ * Pack stride-3 positions (km) into vec4-strided high/low staging buffers, the
+ * layout the WGSL storage arrays consume. Non-finite entries (failed propagation)
+ * become `fallback` far behind the far plane. Returns the packed object count.
+ * Shared by the point and trail renderers so both stay allocation-free.
+ */
+export function packSplit3To4(
+  positionsKm: Float32Array,
+  count: number,
+  high: Float32Array,
+  low: Float32Array,
+  offsetVec4 = 0,
+  fallback = 1e12,
+): number {
+  const n = Math.min(count, Math.floor(Math.min(high.length, low.length) / 4) - offsetVec4);
+  for (let k = 0; k < n; k += 1) {
+    const src = k * 3;
+    const dst = (offsetVec4 + k) * 4;
+    for (let c = 0; c < 3; c += 1) {
+      const v = positionsKm[src + c];
+      const x = v !== undefined && Number.isFinite(v) ? v : fallback;
+      const h = Math.fround(x);
+      high[dst + c] = h;
+      low[dst + c] = Math.fround(x - h);
+    }
+    high[dst + 3] = 0;
+    low[dst + 3] = 0;
+  }
+  return n;
+}
+
+/**
  * Camera position in split form for the uniform buffer, so the GPU can compute
  * (posHigh - eyeHigh) + (posLow - eyeLow) per vertex.
  */

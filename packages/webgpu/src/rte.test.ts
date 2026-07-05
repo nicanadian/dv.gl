@@ -15,7 +15,8 @@
  */
 import { describe, expect, it } from "vitest";
 import { POINTS_WGSL } from "./points.js";
-import { combineSplit, packRte, splitCamera, splitDouble } from "./rte.js";
+import { combineSplit, packRte, packSplit3To4, splitCamera, splitDouble } from "./rte.js";
+import { nextTrailSlot, TRAILS_WGSL, trailSlotForAge } from "./trails.js";
 
 describe("RTE split math (why the clean-sheet path doesn't jitter)", () => {
   it("split halves are individually fp32-representable and sum back to fp64", () => {
@@ -76,5 +77,58 @@ describe("points WGSL", () => {
     expect(POINTS_WGSL).toContain(
       "(posHigh[i].xyz - cam.eyeHigh.xyz) + (posLow[i].xyz - cam.eyeLow.xyz)",
     );
+  });
+});
+
+describe("packSplit3To4 (shared point/trail staging)", () => {
+  it("packs stride-3 into vec4 pairs, maps non-finite to the far fallback", () => {
+    const pos = new Float32Array([6795.1, -3210.9, 1234.5, Number.NaN, 1, 2]);
+    const high = new Float32Array(8);
+    const low = new Float32Array(8);
+    expect(packSplit3To4(pos, 2, high, low)).toBe(2);
+    // input is already fp32, so the split reconstructs it exactly
+    expect((high[0] ?? 0) + (low[0] ?? 0)).toBe(Math.fround(6795.1));
+    expect(high[3]).toBe(0); // vec4 padding
+    expect(high[4]).toBe(Math.fround(1e12)); // NaN pushed behind the far plane
+  });
+
+  it("clamps to staging capacity and honors the vec4 offset", () => {
+    const pos = new Float32Array([1, 2, 3, 4, 5, 6]);
+    const high = new Float32Array(8);
+    const low = new Float32Array(8);
+    expect(packSplit3To4(pos, 2, high, low, 1)).toBe(1); // room for 1 vec4 after offset
+    expect(high[4]).toBe(1);
+  });
+});
+
+describe("trail ring math", () => {
+  it("maps age to slots walking backwards with wraparound", () => {
+    expect(trailSlotForAge(5, 0, 48)).toBe(5);
+    expect(trailSlotForAge(5, 5, 48)).toBe(0);
+    expect(trailSlotForAge(5, 6, 48)).toBe(47); // wraps
+    expect(trailSlotForAge(0, 1, 48)).toBe(47);
+  });
+
+  it("nextTrailSlot advances cyclically", () => {
+    expect(nextTrailSlot(0, 48)).toBe(1);
+    expect(nextTrailSlot(47, 48)).toBe(0);
+  });
+
+  it("push/read round trip: k pushes later, age k-1 is the first push's slot", () => {
+    const slots = 4;
+    let newest = slots - 1; // pre-first-push convention in TrailRenderer
+    const order: number[] = [];
+    for (let push = 0; push < 6; push += 1) {
+      newest = nextTrailSlot(newest, slots);
+      order.push(newest);
+    }
+    // after 6 pushes into 4 slots: newest holds push 5, age 3 holds push 2
+    expect(trailSlotForAge(newest, 0, slots)).toBe(order[5]);
+    expect(trailSlotForAge(newest, 3, slots)).toBe(order[2]);
+  });
+
+  it("WGSL consumes the same ring layout", () => {
+    expect(TRAILS_WGSL).toContain("slot * count + i");
+    expect(TRAILS_WGSL).toContain("(newest + slots - (clampedAge % slots)) % slots");
   });
 });

@@ -21,3 +21,4 @@ export function isWebGpuAvailable(nav: unknown = globalThis.navigator): boolean 
 
 export * from "./points.js";
 export * from "./rte.js";
+export * from "./trails.js";
