@@ -273,6 +273,19 @@ async function main(): Promise<void> {
     // loop never blocks on evaluation, which is why scrubbing stays smooth
     const clockEl = document.getElementById("clock");
     let latestPositions: Float32Array | undefined; // world/TEME, for live access geometry
+    // V1 direction markers: per-object unit velocity (finite difference) + leaders
+    const prevPositions = new Float32Array(source.count * 3);
+    const dirVec = new Float32Array(source.count * 3);
+    let prevMin = Number.NaN;
+    const headingBox = document.getElementById("heading") as HTMLInputElement;
+    const headingLines = new LineRenderer(device, {
+      capacity: source.count * 2,
+      format,
+      depthFormat,
+    });
+    const headSeg = new Float32Array(source.count * 2 * 3);
+    const headCol = new Float32Array(source.count * 2 * 4);
+    const LEADER_KM = 500;
     source.onResult = (positions, minutes, failed) => {
       latestPositions = positions;
       if (renderer === undefined) {
@@ -285,6 +298,22 @@ async function main(): Promise<void> {
         if (colors) renderer.setColors(colors);
       }
       renderer.updatePositions(positions, source.count);
+      // V1: per-object velocity DIRECTION from a finite difference between epochs
+      // (inertial, matches the point dots; persists when paused so the marker
+      // still shows which way is forward in a still/greyscale frame).
+      if (Number.isFinite(prevMin) && minutes !== prevMin) {
+        for (let k = 0; k < source.count; k += 1) {
+          const dx = (positions[k * 3] ?? 0) - (prevPositions[k * 3] ?? 0);
+          const dy = (positions[k * 3 + 1] ?? 0) - (prevPositions[k * 3 + 1] ?? 0);
+          const dz = (positions[k * 3 + 2] ?? 0) - (prevPositions[k * 3 + 2] ?? 0);
+          const l = Math.hypot(dx, dy, dz) || 1;
+          dirVec[k * 3] = dx / l;
+          dirVec[k * 3 + 1] = dy / l;
+          dirVec[k * 3 + 2] = dz / l;
+        }
+      }
+      prevPositions.set(positions.subarray(0, source.count * 3));
+      prevMin = minutes;
       const d = Math.floor(minutes / 1440);
       const h = Math.floor((minutes % 1440) / 60);
       const m = Math.floor(minutes % 60);
@@ -537,6 +566,29 @@ async function main(): Promise<void> {
         accessLines.updateCamera(viewProjRte, eye);
       }
 
+      // V1: direction leaders -- a short along-track velocity stub at each object
+      if (headingBox.checked && latestPositions) {
+        let hs = 0;
+        for (let k = 0; k < source.count; k += 1) {
+          if (colors && (colors[k * 4 + 3] ?? 1) === 0) continue;
+          const x = latestPositions[k * 3] ?? Number.NaN;
+          const y = latestPositions[k * 3 + 1] ?? Number.NaN;
+          const z = latestPositions[k * 3 + 2] ?? Number.NaN;
+          if (!Number.isFinite(x)) continue;
+          const p = hs * 6;
+          headSeg[p] = x;
+          headSeg[p + 1] = y;
+          headSeg[p + 2] = z;
+          headSeg[p + 3] = x + (dirVec[k * 3] ?? 0) * LEADER_KM;
+          headSeg[p + 4] = y + (dirVec[k * 3 + 1] ?? 0) * LEADER_KM;
+          headSeg[p + 5] = z + (dirVec[k * 3 + 2] ?? 0) * LEADER_KM;
+          headCol.set([1, 1, 1, 0.9, 1, 1, 1, 0.9], hs * 8); // bright white leader
+          hs += 1;
+        }
+        headingLines.setSegments(headSeg, headCol, hs);
+        headingLines.updateCamera(viewProjRte, eye);
+      }
+
       const encoder = device.createCommandEncoder();
       const pass = encoder.beginRenderPass({
         colorAttachments: [
@@ -560,6 +612,7 @@ async function main(): Promise<void> {
         accessLines.draw(pass);
         stationPts.draw(pass);
       }
+      if (headingBox.checked) headingLines.draw(pass);
       renderer?.draw(pass);
       pass.end();
 
