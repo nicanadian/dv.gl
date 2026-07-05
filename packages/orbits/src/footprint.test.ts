@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 import { describe, expect, it } from "vitest";
-import { footprintCentralAngleRad, footprintRing } from "./footprint.js";
+import { footprintCentralAngleRad, footprintRing, sensorSwathEdges } from "./footprint.js";
 
 describe("footprintCentralAngleRad", () => {
   const rSat = 6371.0088 + 550; // 550 km altitude
@@ -63,5 +63,66 @@ describe("footprintRing", () => {
     const r0 = Math.hypot(...(footprintRing(sat, 20, 8, 0).subarray(0, 3) as unknown as number[]));
     const r5 = Math.hypot(...(footprintRing(sat, 20, 8, 5).subarray(0, 3) as unknown as number[]));
     expect(r5 - r0).toBeCloseTo(5, 3);
+  });
+});
+
+describe("sensorSwathEdges", () => {
+  // satellite over the equator at lon 0, on the +x axis
+  const sat: [number, number, number] = [6371.0088 + 550, 0, 0];
+  const meanY = (e: Float32Array): number => {
+    let s = 0;
+    for (let i = 0; i < e.length; i += 3) s += e[i + 1] ?? 0;
+    return s / (e.length / 3);
+  };
+  const meanCentralAngle = (e: Float32Array): number => {
+    // angle from the sub-satellite direction (+x)
+    let s = 0;
+    const n = e.length / 3;
+    for (let i = 0; i < e.length; i += 3) {
+      const p = [e[i] ?? 0, e[i + 1] ?? 0, e[i + 2] ?? 0];
+      const r = Math.hypot(p[0], p[1], p[2]) || 1;
+      s += Math.acos((p[0] ?? 0) / r);
+    }
+    return s / n;
+  };
+
+  it("SAR-style one-sided strip is offset off-nadir on a single side", () => {
+    // ascending (velocity +z = north), right-looking -> east (+y)
+    const { near, far } = sensorSwathEdges(sat, [0, 0, 7], {
+      side: "right",
+      innerOffNadirDeg: 20,
+      outerOffNadirDeg: 40,
+    });
+    expect(meanY(near)).toBeGreaterThan(0); // one side only
+    expect(meanY(far)).toBeGreaterThan(0);
+    // never at nadir, and the far edge is further out than the near edge
+    expect(meanCentralAngle(near)).toBeGreaterThan(0.01);
+    expect(meanCentralAngle(far)).toBeGreaterThan(meanCentralAngle(near));
+  });
+
+  it("EO field-of-regard band straddles nadir symmetrically", () => {
+    const { near, far } = sensorSwathEdges(sat, [0, 0, 7], {
+      side: "both",
+      innerOffNadirDeg: 0,
+      outerOffNadirDeg: 30,
+    });
+    expect(meanY(near)).toBeLessThan(0); // one edge west
+    expect(meanY(far)).toBeGreaterThan(0); // other edge east
+    expect(meanY(near)).toBeCloseTo(-meanY(far), 3); // symmetric about the track
+  });
+
+  it("right-look strip flips geographic side between ascending and descending", () => {
+    const asc = sensorSwathEdges(sat, [0, 0, 7], {
+      side: "right",
+      innerOffNadirDeg: 20,
+      outerOffNadirDeg: 40,
+    });
+    const desc = sensorSwathEdges(sat, [0, 0, -7], {
+      side: "right",
+      innerOffNadirDeg: 20,
+      outerOffNadirDeg: 40,
+    });
+    // same commanded "right" look, opposite geographic side -> the asc/desc fix
+    expect(Math.sign(meanY(asc.far))).toBe(-Math.sign(meanY(desc.far)));
   });
 });

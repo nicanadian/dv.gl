@@ -27,14 +27,16 @@ import {
   LineRenderer,
   OrbitTrackRenderer,
   PointRenderer,
+  TriRenderer,
 } from "@dvgl/webgpu";
 import {
   catalogEpochMs,
   CoverageGrid,
   elevationDeg,
   footprintCentralAngleRad,
-  footprintRing,
   parseCatalog,
+  sensorSwathEdges,
+  type SwathOptions,
   stationEcef,
 } from "@dvgl/orbits";
 import { loadCatalogText, makeSource, readVariant } from "./sources.js";
@@ -317,19 +319,44 @@ async function main(): Promise<void> {
     const headCol = new Float32Array(source.count * 2 * 4);
     const LEADER_KM = 500;
 
-    // V5 sensor footprints: per-family nadir half-angle (app policy) -> ground ring
-    const FP_SEGMENTS = 48;
-    const halfAngleFor = (fam: string | undefined): number =>
-      fam === "SAR" ? 25 : fam === "EO" ? 12 : 18;
-    const perObjHalfAngle = families?.map(halfAngleFor);
+    // V5 sensor footprints: realistic ground SWATHS following the velocity frame
+    // (app policy = which sensor geometry). SAR = a one-sided side-looking strip
+    // over an incidence band (never nadir; the frame flips the geographic side on
+    // ascending vs descending passes); EO = a cross-track field-of-regard band
+    // straddling nadir. dv.gl computes the ground polygon; we fill + outline it.
+    const SWATH_SEG = 14;
+    const SWATH_EO: SwathOptions = {
+      side: "both",
+      innerOffNadirDeg: 0,
+      outerOffNadirDeg: 30,
+      alongHalfDeg: 4,
+      segments: SWATH_SEG,
+    };
+    const SWATH: Record<string, SwathOptions> = {
+      SAR: { side: "right", innerOffNadirDeg: 19, outerOffNadirDeg: 41, alongHalfDeg: 4, segments: SWATH_SEG },
+      EO: SWATH_EO,
+    };
+    const swathFor = (fam: string | undefined): SwathOptions => SWATH[fam ?? ""] ?? SWATH_EO;
+    // coverage still stamps a nadir cap; use the outer look angle as its half-angle
+    const perObjHalfAngle = families?.map((f) => swathFor(f).outerOffNadirDeg);
     const footprintsBox = document.getElementById("footprints") as HTMLInputElement;
-    const footprintLines = new LineRenderer(device, {
-      capacity: source.count * FP_SEGMENTS * 2,
+    // filled ground area (translucent, flat alpha per the style rule)
+    const footprintFill = new TriRenderer(device, {
+      capacity: source.count * (SWATH_SEG - 1) * 2 * 3,
       format,
       depthFormat,
     });
-    const fpSeg = new Float32Array(source.count * FP_SEGMENTS * 2 * 3);
-    const fpCol = new Float32Array(source.count * FP_SEGMENTS * 2 * 4);
+    const fpTriPos = new Float32Array(source.count * (SWATH_SEG - 1) * 2 * 3 * 3);
+    const fpTriCol = new Float32Array(source.count * (SWATH_SEG - 1) * 2 * 3 * 4);
+    // crisp edge outline (near edge, far edge, two end caps)
+    const FP_OUTLINE_SEG = SWATH_SEG * 2 + 2;
+    const footprintLines = new LineRenderer(device, {
+      capacity: source.count * FP_OUTLINE_SEG * 2,
+      format,
+      depthFormat,
+    });
+    const fpSeg = new Float32Array(source.count * FP_OUTLINE_SEG * 2 * 3);
+    const fpCol = new Float32Array(source.count * FP_OUTLINE_SEG * 2 * 4);
 
     // V7 coverage accumulation: an equirect grid the footprints stamp as time
     // advances, rendered as a heat point-cloud on the surface.
@@ -354,9 +381,12 @@ async function main(): Promise<void> {
     const mapCov = new PointRenderer(device, { capacity: 90 * 180, format, pointSizePx: 3 });
     const mapGrat = new LineRenderer(device, { capacity: 4096, format });
     const mapTracks = new LineRenderer(device, { capacity: source.count * TRACK_SAMPLES * 2, format });
+    const mapFp = new TriRenderer(device, { capacity: source.count * (SWATH_SEG - 1) * 2 * 3, format });
     const mapPos = new Float32Array(source.count * 3);
     const mapTrkPos = new Float32Array(source.count * TRACK_SAMPLES * 2 * 3);
     const mapTrkCol = new Float32Array(source.count * TRACK_SAMPLES * 2 * 4);
+    const mapFpPos = new Float32Array(source.count * (SWATH_SEG - 1) * 2 * 3 * 3);
+    const mapFpCol = new Float32Array(source.count * (SWATH_SEG - 1) * 2 * 3 * 4);
     // static graticule (30deg grid + border)
     {
       const seg: number[] = [];
@@ -460,6 +490,61 @@ async function main(): Promise<void> {
         mapTracks.setSegments(mapTrkPos.subarray(0, tv * 3), mapTrkCol.subarray(0, tv * 4), tv / 2);
         mapTracks.updateCamera(vp, eye0);
       }
+      // footprint swaths: project the velocity-frame ground band to plane coords,
+      // filled. Triangles that straddle the antimeridian are dropped (else smear).
+      let ftv = 0;
+      if (footprintsBox.checked && latestPositions) {
+        const toPlane = (e: Float32Array): Float32Array => {
+          const seg = e.length / 3;
+          const out = new Float32Array(seg * 2);
+          for (let j = 0; j < seg; j += 1) {
+            const px = e[j * 3] ?? 0;
+            const py = e[j * 3 + 1] ?? 0;
+            const g = ecefToGeodetic(cc * px + ss * py, -ss * px + cc * py, e[j * 3 + 2] ?? 0);
+            out[j * 2] = g.lonDeg / 90;
+            out[j * 2 + 1] = g.latDeg / 90;
+          }
+          return out;
+        };
+        for (let k = 0; k < source.count; k += 1) {
+          if (colors && (colors[k * 4 + 3] ?? 1) === 0) continue;
+          const x = latestPositions[k * 3] ?? Number.NaN;
+          if (!Number.isFinite(x)) continue;
+          const vx = dirVec[k * 3] ?? 0;
+          const vy = dirVec[k * 3 + 1] ?? 0;
+          const vz = dirVec[k * 3 + 2] ?? 0;
+          if (vx === 0 && vy === 0 && vz === 0) continue;
+          const { near, far } = sensorSwathEdges(
+            [x, latestPositions[k * 3 + 1] ?? 0, latestPositions[k * 3 + 2] ?? 0],
+            [vx, vy, vz],
+            swathFor(families?.[k]),
+          );
+          const nl = toPlane(near);
+          const fl = toPlane(far);
+          const seg = near.length / 3;
+          const cr = colors?.[k * 4] ?? 0.6;
+          const cg2 = colors?.[k * 4 + 1] ?? 0.85;
+          const cb = colors?.[k * 4 + 2] ?? 1.0;
+          for (let j = 0; j < seg - 1; j += 1) {
+            const xs = [nl[j * 2], fl[j * 2], nl[(j + 1) * 2], fl[(j + 1) * 2]].map((v) => v ?? 0);
+            // antimeridian guard: skip if the quad spans more than half the map in x
+            if (Math.max(...xs) - Math.min(...xs) > 2) continue;
+            const quad = [
+              nl[j * 2], nl[j * 2 + 1], fl[j * 2], fl[j * 2 + 1], nl[(j + 1) * 2], nl[(j + 1) * 2 + 1],
+              fl[j * 2], fl[j * 2 + 1], fl[(j + 1) * 2], fl[(j + 1) * 2 + 1], nl[(j + 1) * 2], nl[(j + 1) * 2 + 1],
+            ];
+            for (let c = 0; c < 6; c += 1) {
+              mapFpPos[ftv * 3] = quad[c * 2] ?? 0;
+              mapFpPos[ftv * 3 + 1] = quad[c * 2 + 1] ?? 0;
+              mapFpPos[ftv * 3 + 2] = 0;
+              mapFpCol.set([cr, cg2, cb, 0.22], ftv * 4);
+              ftv += 1;
+            }
+          }
+        }
+        mapFp.setTriangles(mapFpPos.subarray(0, ftv * 3), mapFpCol.subarray(0, ftv * 4), ftv / 3);
+        mapFp.updateCamera(vp, eye0);
+      }
       let cv = 0;
       if (coverageBox.checked) {
         const maxV = coverage.max() || 1;
@@ -493,6 +578,7 @@ async function main(): Promise<void> {
       mapGrat.draw(pass);
       if (coverageBox.checked) mapCov.draw(pass);
       if (tv > 0) mapTracks.draw(pass);
+      if (ftv > 0) mapFp.draw(pass);
       mapPts.draw(pass);
       pass.end();
       device.queue.submit([enc.finish()]);
@@ -898,35 +984,68 @@ async function main(): Promise<void> {
         headingLines.updateCamera(viewProjRte, eye);
       }
 
-      // V5: sensor footprint rings on the ground (frame-agnostic small circle)
+      // V5: sensor footprint SWATHS -- a filled ground band following the velocity
+      // frame, plus a crisp edge outline. SAR one-sided strip / EO straddle band.
       if (footprintsBox.checked && latestPositions) {
-        let fs = 0;
+        let ft = 0; // fill triangle count
+        let fs = 0; // outline segment count
+        const triVert = (e: Float32Array, j: number): void => {
+          fpTriPos[ft * 3] = e[j * 3] ?? 0;
+          fpTriPos[ft * 3 + 1] = e[j * 3 + 1] ?? 0;
+          fpTriPos[ft * 3 + 2] = e[j * 3 + 2] ?? 0;
+          ft += 1;
+        };
+        const outline = (a: Float32Array, ai: number, b: Float32Array, bi: number): void => {
+          const p = fs * 6;
+          fpSeg[p] = a[ai * 3] ?? 0;
+          fpSeg[p + 1] = a[ai * 3 + 1] ?? 0;
+          fpSeg[p + 2] = a[ai * 3 + 2] ?? 0;
+          fpSeg[p + 3] = b[bi * 3] ?? 0;
+          fpSeg[p + 4] = b[bi * 3 + 1] ?? 0;
+          fpSeg[p + 5] = b[bi * 3 + 2] ?? 0;
+          fs += 1;
+        };
         for (let k = 0; k < source.count; k += 1) {
           if (colors && (colors[k * 4 + 3] ?? 1) === 0) continue;
           const x = latestPositions[k * 3] ?? Number.NaN;
           const y = latestPositions[k * 3 + 1] ?? Number.NaN;
           const z = latestPositions[k * 3 + 2] ?? Number.NaN;
           if (!Number.isFinite(x)) continue;
-          const ring = footprintRing([x, y, z], perObjHalfAngle?.[k] ?? 18, FP_SEGMENTS, 6);
+          const vx = dirVec[k * 3] ?? 0;
+          const vy = dirVec[k * 3 + 1] ?? 0;
+          const vz = dirVec[k * 3 + 2] ?? 0;
+          if (vx === 0 && vy === 0 && vz === 0) continue; // heading not established yet
+          const { near, far } = sensorSwathEdges([x, y, z], [vx, vy, vz], swathFor(families?.[k]));
+          const seg = near.length / 3;
           const cr = colors?.[k * 4] ?? 0.6;
           const cgc = colors?.[k * 4 + 1] ?? 0.85;
           const cb = colors?.[k * 4 + 2] ?? 1.0;
-          for (let i = 0; i < FP_SEGMENTS; i += 1) {
-            const a = i * 3;
-            const b = ((i + 1) % FP_SEGMENTS) * 3;
-            const p = fs * 6;
-            fpSeg[p] = ring[a] ?? 0;
-            fpSeg[p + 1] = ring[a + 1] ?? 0;
-            fpSeg[p + 2] = ring[a + 2] ?? 0;
-            fpSeg[p + 3] = ring[b] ?? 0;
-            fpSeg[p + 4] = ring[b + 1] ?? 0;
-            fpSeg[p + 5] = ring[b + 2] ?? 0;
-            fpCol.set([cr, cgc, cb, 0.4, cr, cgc, cb, 0.4], fs * 8);
-            fs += 1;
+          for (let j = 0; j < seg - 1; j += 1) {
+            const t0 = ft;
+            triVert(near, j);
+            triVert(far, j);
+            triVert(near, j + 1);
+            triVert(far, j);
+            triVert(far, j + 1);
+            triVert(near, j + 1);
+            for (let v = t0; v < ft; v += 1) fpTriCol.set([cr, cgc, cb, 0.18], v * 4);
+            const s0 = fs;
+            outline(near, j, near, j + 1); // near edge
+            outline(far, j, far, j + 1); // far edge
+            for (let s = s0; s < fs; s += 1) fpCol.set([cr, cgc, cb, 0.8, cr, cgc, cb, 0.8], s * 8);
           }
+          const s0 = fs;
+          outline(near, 0, far, 0); // end caps
+          outline(near, seg - 1, far, seg - 1);
+          for (let s = s0; s < fs; s += 1) fpCol.set([cr, cgc, cb, 0.8, cr, cgc, cb, 0.8], s * 8);
         }
+        footprintFill.setTriangles(fpTriPos, fpTriCol, ft / 3);
+        footprintFill.updateCamera(viewProjRte, eye);
         footprintLines.setSegments(fpSeg, fpCol, fs);
         footprintLines.updateCamera(viewProjRte, eye);
+      } else {
+        footprintFill.clear();
+        footprintLines.clear();
       }
 
       // V7: rebuild the coverage heat point-cloud from the accumulated grid
@@ -1036,7 +1155,10 @@ async function main(): Promise<void> {
         accessLines.draw(pass);
         stationPts.draw(pass);
       }
-      if (footprintsBox.checked) footprintLines.draw(pass);
+      if (footprintsBox.checked) {
+        footprintFill.draw(pass); // filled ground area, under...
+        footprintLines.draw(pass); // ...the crisp edge outline
+      }
       if (headingBox.checked) headingLines.draw(pass);
       renderer?.draw(pass);
       pass.end();

@@ -25,3 +25,4 @@ export * from "./orbitTracks.js";
 export * from "./points.js";
 export * from "./rte.js";
 export * from "./trails.js";
+export * from "./tris.js";
