@@ -138,17 +138,36 @@ async function main(): Promise<void> {
     const view: View = { lonDeg: -75, latDeg: 25, rangeKm: 45_000 };
 
     // family colors when the source knows object names (EO cyan, SAR gold);
-    // everything else keeps the catalog cyan
-    const familyColors = (): Float32Array | undefined => {
-      if (!source.names) return undefined;
+    // everything else keeps the catalog cyan. The per-object alpha channel is the
+    // mission-type FILTER: 0 hides that family from both points and tracks.
+    const eoBox = document.getElementById("eo") as HTMLInputElement;
+    const sarBox = document.getElementById("sar") as HTMLInputElement;
+    const families = source.names?.map((n) => (/sar/i.test(n) ? "SAR" : "EO"));
+    const buildColors = (): Float32Array | undefined => {
+      if (!families) return undefined;
       const rgba = new Float32Array(source.count * 4);
-      source.names.forEach((name, k) => {
-        const sar = /sar/i.test(name);
-        rgba.set(sar ? [1.0, 0.78, 0.35, 1.0] : [0.55, 0.85, 1.0, 1.0], k * 4);
+      families.forEach((fam, k) => {
+        const rgb = fam === "SAR" ? [1.0, 0.78, 0.35] : [0.55, 0.85, 1.0];
+        const show = fam === "SAR" ? sarBox.checked : eoBox.checked;
+        rgba.set([rgb[0] ?? 0, rgb[1] ?? 0, rgb[2] ?? 0, show ? 1 : 0], k * 4);
       });
       return rgba;
     };
-    const colors = familyColors();
+    let colors = buildColors();
+    if (families === undefined) {
+      // no families (TLE catalog): the toggles do nothing
+      eoBox.disabled = true;
+      sarBox.disabled = true;
+    }
+    const applyColors = (): void => {
+      colors = buildColors();
+      if (colors) {
+        renderer?.setColors(colors);
+        tracks?.setColors(colors);
+      }
+    };
+    eoBox.addEventListener("change", applyColors);
+    sarBox.addEventListener("change", applyColors);
 
     // @dvgl/core's first consumer: the MissionClock owns play state, rate, looping,
     // and the scene-time axis; the page just feeds it wall deltas and reads it.

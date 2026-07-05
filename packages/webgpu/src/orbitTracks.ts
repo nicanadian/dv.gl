@@ -79,7 +79,8 @@ fn vs(@builtin(vertex_index) s : u32, @builtin(instance_index) i : u32) -> VsOut
   let nowIdx = mid * (1.0 + cam.params.w / max(periodsMin[i], 1e-6));
   out.future = select(0.0, 1.0, f32(s) > nowIdx);
   // previous rev: 100% of the object's color. next rev: same hue at 60%.
-  out.alpha = select(1.0, 0.6, out.future > 0.5);
+  // colors[i].a is the per-object visibility (0 hides a filtered family).
+  out.alpha = select(1.0, 0.6, out.future > 0.5) * colors[i].a;
   out.color = colors[i];
   return out;
 }
