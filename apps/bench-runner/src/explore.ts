@@ -21,8 +21,8 @@
  */
 import { MissionClock } from "@dvgl/core";
 import { ecefToSurface, gmst } from "@dvgl/frames";
-import { EarthRenderer, OrbitTrackRenderer, PointRenderer } from "@dvgl/webgpu";
-import { catalogEpochMs, parseCatalog } from "@dvgl/orbits";
+import { EarthRenderer, LineRenderer, OrbitTrackRenderer, PointRenderer } from "@dvgl/webgpu";
+import { catalogEpochMs, elevationDeg, parseCatalog, stationEcef } from "@dvgl/orbits";
 import { loadCatalogText, makeSource, readVariant } from "./sources.js";
 
 // ---- minimal mat4 (same as cleansheet) ----
@@ -242,7 +242,9 @@ async function main(): Promise<void> {
     // async propagation: latest-wins coalescing lives in the source; the render
     // loop never blocks on evaluation, which is why scrubbing stays smooth
     const clockEl = document.getElementById("clock");
+    let latestPositions: Float32Array | undefined; // world/TEME, for live access geometry
     source.onResult = (positions, minutes, failed) => {
+      latestPositions = positions;
       if (renderer === undefined) {
         renderer = new PointRenderer(device, { capacity: source.count, format, depthFormat });
         if (colors) renderer.setColors(colors);
@@ -357,6 +359,34 @@ async function main(): Promise<void> {
       lastWindowCenterMin = centerMinutes; // the split offset is measured from HERE
     };
 
+    // ---- ground stations + live access lines (V4) ----
+    const STATIONS = [
+      { name: "SVALBARD", latDeg: 78.23, lonDeg: 15.4, minElevationDeg: 5 },
+      { name: "FAIRBANKS", latDeg: 64.8, lonDeg: -147.7, minElevationDeg: 5 },
+      { name: "PUNTA ARENAS", latDeg: -53.0, lonDeg: -70.9, minElevationDeg: 5 },
+      { name: "SINGAPORE", latDeg: 1.35, lonDeg: 103.8, minElevationDeg: 5 },
+    ];
+    const stEcef = STATIONS.map((s) => stationEcef(s));
+    const stMask = STATIONS.map((s) => s.minElevationDeg ?? 5);
+    const stationPts = new PointRenderer(device, {
+      capacity: STATIONS.length,
+      format,
+      depthFormat,
+      pointSizePx: 7,
+    });
+    stationPts.setColors(
+      new Float32Array(STATIONS.flatMap(() => [0.7, 1.0, 0.7, 1.0])), // station green
+    );
+    const stationWorld = new Float32Array(STATIONS.length * 3);
+    const accessLines = new LineRenderer(device, {
+      capacity: STATIONS.length * source.count * 2,
+      format,
+      depthFormat,
+    });
+    const segPos = new Float32Array(STATIONS.length * source.count * 2 * 3);
+    const segCol = new Float32Array(STATIONS.length * source.count * 2 * 4);
+    const stationsBox = document.getElementById("stations") as HTMLInputElement;
+
     let lastT = performance.now();
     const tick = (): void => {
       const now = performance.now();
@@ -401,6 +431,52 @@ async function main(): Promise<void> {
           clock.currentSeconds / 60 - lastWindowCenterMin, // continuous now-split
         );
 
+      // stations + access lines: place stations in the inertial world (Rz(+gmst))
+      // and draw a line to each satellite currently above that station's mask.
+      if (stationsBox.checked) {
+        const cg = Math.cos(gmstRad);
+        const sg = Math.sin(gmstRad);
+        for (let i = 0; i < STATIONS.length; i += 1) {
+          const e = stEcef[i]?.ecef ?? [0, 0, 0];
+          stationWorld[i * 3] = cg * e[0] - sg * e[1];
+          stationWorld[i * 3 + 1] = sg * e[0] + cg * e[1];
+          stationWorld[i * 3 + 2] = e[2];
+        }
+        stationPts.updatePositions(stationWorld, STATIONS.length);
+        stationPts.updateCamera(viewProjRte, eye, canvas.width, canvas.height);
+        let seg = 0;
+        if (latestPositions) {
+          for (let i = 0; i < STATIONS.length; i += 1) {
+            const st = stEcef[i];
+            if (st === undefined) continue;
+            for (let k = 0; k < source.count; k += 1) {
+              if (colors && (colors[k * 4 + 3] ?? 1) === 0) continue; // filtered out
+              const x = latestPositions[k * 3] ?? Number.NaN;
+              const y = latestPositions[k * 3 + 1] ?? Number.NaN;
+              const z = latestPositions[k * 3 + 2] ?? Number.NaN;
+              if (!Number.isFinite(x)) continue;
+              const satEcef: [number, number, number] = [cg * x + sg * y, -sg * x + cg * y, z];
+              if (elevationDeg(st, satEcef) < (stMask[i] ?? 5)) continue;
+              const p = seg * 6;
+              segPos[p] = stationWorld[i * 3] ?? 0;
+              segPos[p + 1] = stationWorld[i * 3 + 1] ?? 0;
+              segPos[p + 2] = stationWorld[i * 3 + 2] ?? 0;
+              segPos[p + 3] = x;
+              segPos[p + 4] = y;
+              segPos[p + 5] = z;
+              const c = seg * 8;
+              const cr = colors?.[k * 4] ?? 0.6;
+              const cgc = colors?.[k * 4 + 1] ?? 0.85;
+              const cb = colors?.[k * 4 + 2] ?? 1.0;
+              segCol.set([cr, cgc, cb, 0.8, cr, cgc, cb, 0.8], c);
+              seg += 1;
+            }
+          }
+        }
+        accessLines.setSegments(segPos, segCol, seg);
+        accessLines.updateCamera(viewProjRte, eye);
+      }
+
       const encoder = device.createCommandEncoder();
       const pass = encoder.beginRenderPass({
         colorAttachments: [
@@ -420,6 +496,10 @@ async function main(): Promise<void> {
       });
       earth.draw(pass); // writes depth: satellites occlude behind the planet
       if (trackMode() !== "none") tracks?.draw(pass); // under the points
+      if (stationsBox.checked) {
+        accessLines.draw(pass);
+        stationPts.draw(pass);
+      }
       renderer?.draw(pass);
       pass.end();
       device.queue.submit([encoder.finish()]);
