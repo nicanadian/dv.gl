@@ -22,6 +22,7 @@
 import { declutterLabels, type LabelBox, MissionClock, TimelineMarks } from "@dvgl/core";
 import { ecefToGeodetic, ecefToSurface, geodeticToEcef, gmst } from "@dvgl/frames";
 import {
+  CoverageOverlay,
   decodePickedIndex,
   EarthRenderer,
   LineRenderer,
@@ -31,10 +32,10 @@ import {
 } from "@dvgl/webgpu";
 import {
   catalogEpochMs,
-  CoverageGrid,
   elevationDeg,
   footprintCentralAngleRad,
   parseCatalog,
+  RevisitGrid,
   sensorSwathEdges,
   type SwathOptions,
   stationEcef,
@@ -102,16 +103,6 @@ interface View {
   lonDeg: number;
   latDeg: number;
   rangeKm: number;
-}
-
-/** Coverage heat ramp: blue (low) -> yellow -> red (high). */
-function heat(t: number): [number, number, number] {
-  if (t < 0.5) {
-    const u = t * 2;
-    return [0.2 + 0.8 * u, 0.4 + 0.6 * u, 1 - 0.7 * u];
-  }
-  const u = (t - 0.5) * 2;
-  return [1, 1 - 0.7 * u, 0.3 - 0.1 * u];
 }
 
 function eyeFrom(view: View): [number, number, number] {
@@ -454,27 +445,44 @@ async function main(): Promise<void> {
       return { tris: ft / 3, segs: fs };
     };
 
-    // V7 coverage accumulation: an equirect grid the footprints stamp as time
-    // advances, rendered as a heat point-cloud on the surface.
-    const coverage = new CoverageGrid(90, 180);
+    // COVERAGE = age-of-collection ("did see, how recently"), NOT access ("could
+    // see"). A revisit grid records when each cell was last stamped by a footprint;
+    // the age over a rolling window renders as a filled viridis field draped on the
+    // globe and the 2D map (one texture, both views). Highlights where the fleet is
+    // going stale -- the operator's real question -- not a vanity hit-count rainbow.
+    const COV_LAT = 120;
+    const COV_LON = 240;
+    const COV_WINDOW_MIN = 360; // age ramp saturates at 6 h since last look
+    const revisit = new RevisitGrid(COV_LAT, COV_LON);
+    const ageBuf = new Uint8Array(COV_LAT * COV_LON);
     const coverageBox = document.getElementById("coverage") as HTMLInputElement;
+    const covLegend = document.getElementById("covLegend") as HTMLElement;
     coverageBox.addEventListener("change", () => {
-      if (coverageBox.checked) coverage.reset();
+      if (coverageBox.checked) revisit.reset();
+      covLegend.style.display = coverageBox.checked ? "block" : "none";
     });
-    const covPts = new PointRenderer(device, {
-      capacity: 90 * 180,
+    const coverageSphere = new CoverageOverlay(device, {
+      mode: "sphere",
+      gridW: COV_LON,
+      gridH: COV_LAT,
       format,
       depthFormat,
-      pointSizePx: 3,
+      alpha: 0.55,
+      steps: 6,
     });
-    const covPos = new Float32Array(90 * 180 * 3);
-    const covCol = new Float32Array(90 * 180 * 4);
+    const coveragePlane = new CoverageOverlay(device, {
+      mode: "plane",
+      gridW: COV_LON,
+      gridH: COV_LAT,
+      format,
+      alpha: 0.62,
+      steps: 6,
+    });
 
     // V9 2D equirectangular map: the same clock + data on a flat lon/lat plane.
     // Plane coords: x = lon/90 in [-2,2], y = lat/90 in [-1,1]. No depth (flat).
     const map2dBox = document.getElementById("map2d") as HTMLInputElement;
     const mapPts = new PointRenderer(device, { capacity: source.count, format, pointSizePx: 4 });
-    const mapCov = new PointRenderer(device, { capacity: 90 * 180, format, pointSizePx: 3 });
     const mapGrat = new LineRenderer(device, { capacity: 4096, format });
     const mapTracks = new LineRenderer(device, { capacity: source.count * TRACK_SAMPLES * 2, format });
     const mapFp = new TriRenderer(device, { capacity: source.count * (SWATH_SEG - 1) * 2 * 3, format });
@@ -641,23 +649,10 @@ async function main(): Promise<void> {
         mapFp.setTriangles(mapFpPos.subarray(0, ftv * 3), mapFpCol.subarray(0, ftv * 4), ftv / 3);
         mapFp.updateCamera(vp, eye0);
       }
-      let cv = 0;
       if (coverageBox.checked) {
-        const maxV = coverage.max() || 1;
-        coverage.forEachCovered((lat, lon, v) => {
-          covPos[cv * 3] = lon / 90;
-          covPos[cv * 3 + 1] = lat / 90;
-          covPos[cv * 3 + 2] = 0;
-          const c = heat(Math.min(1, v / maxV));
-          covCol[cv * 4] = c[0];
-          covCol[cv * 4 + 1] = c[1];
-          covCol[cv * 4 + 2] = c[2];
-          covCol[cv * 4 + 3] = 0.7;
-          cv += 1;
-        });
-        mapCov.updatePositions(covPos, cv);
-        mapCov.setColors(covCol.subarray(0, cv * 4));
-        mapCov.updateCamera(vp, eye0, canvas.width, canvas.height);
+        revisit.ageTexture(clock.currentSeconds / 60, COV_WINDOW_MIN, ageBuf);
+        coveragePlane.setField(ageBuf);
+        coveragePlane.updateCamera(vp, eye0, 0);
       }
       void n;
       const enc = device.createCommandEncoder();
@@ -671,8 +666,8 @@ async function main(): Promise<void> {
           },
         ],
       });
+      if (coverageBox.checked) coveragePlane.draw(pass); // filled field, beneath all
       mapGrat.draw(pass);
-      if (coverageBox.checked) mapCov.draw(pass);
       if (tv > 0) mapTracks.draw(pass);
       if (ftv > 0) mapFp.draw(pass);
       mapPts.draw(pass);
@@ -740,7 +735,8 @@ async function main(): Promise<void> {
           const ey = -ss * x + cc * y;
           const g = ecefToGeodetic(ex, ey, z);
           const r = Math.hypot(ex, ey, z);
-          coverage.stamp(g.latDeg, g.lonDeg, footprintCentralAngleRad(r, perObjHalfAngle?.[k] ?? 18));
+          // record the last-seen scene time for cells under this footprint
+          revisit.stamp(g.latDeg, g.lonDeg, footprintCentralAngleRad(r, perObjHalfAngle?.[k] ?? 18), minutes);
         }
       }
       const d = Math.floor(minutes / 1440);
@@ -825,6 +821,7 @@ async function main(): Promise<void> {
       clock.pause();
       playBtn.textContent = "play";
       lastWindowCenterMin = Number.NEGATIVE_INFINITY; // tracks recompute at the new time
+      revisit.reset(); // a coverage field that ignored the scrub would silently lie
       dirty = true;
     });
     playBtn.addEventListener("click", () => {
@@ -879,6 +876,7 @@ async function main(): Promise<void> {
         playBtn.textContent = "play";
         slider.value = String(Math.floor(target.timeSec / 60));
         invalidateWindow();
+        revisit.reset();
         dirty = true;
       }
     });
@@ -1118,28 +1116,12 @@ async function main(): Promise<void> {
         footprintLines.clear();
       }
 
-      // V7: rebuild the coverage heat point-cloud from the accumulated grid
+      // COVERAGE: age-of-collection field draped on the globe (viridis, GMST-spun
+      // so it sits earth-fixed like the footprints that wrote it)
       if (coverageBox.checked) {
-        const cg2 = Math.cos(gmstRad);
-        const sg2 = Math.sin(gmstRad);
-        const maxV = coverage.max() || 1;
-        let ci = 0;
-        coverage.forEachCovered((lat, lon, v) => {
-          const e = geodeticToEcef(lat, lon, 8);
-          covPos[ci * 3] = cg2 * e[0] - sg2 * e[1]; // ECEF -> world (Rz(+gmst))
-          covPos[ci * 3 + 1] = sg2 * e[0] + cg2 * e[1];
-          covPos[ci * 3 + 2] = e[2];
-          const t = Math.min(1, v / maxV);
-          const c = heat(t);
-          covCol[ci * 4] = c[0];
-          covCol[ci * 4 + 1] = c[1];
-          covCol[ci * 4 + 2] = c[2];
-          covCol[ci * 4 + 3] = 0.7;
-          ci += 1;
-        });
-        covPts.updatePositions(covPos, ci);
-        covPts.setColors(covCol.subarray(0, ci * 4));
-        covPts.updateCamera(viewProjRte, eye, canvas.width, canvas.height);
+        revisit.ageTexture(clock.currentSeconds / 60, COV_WINDOW_MIN, ageBuf);
+        coverageSphere.setField(ageBuf);
+        coverageSphere.updateCamera(viewProjRte, eye, gmstRad);
       }
 
       // V8: project objects to screen, declutter, place DOM labels
@@ -1219,7 +1201,7 @@ async function main(): Promise<void> {
         },
       });
       earth.draw(pass); // writes depth: satellites occlude behind the planet
-      if (coverageBox.checked) covPts.draw(pass); // heat overlay on the surface
+      if (coverageBox.checked) coverageSphere.draw(pass); // filled age field on the surface
       if (trackMode() !== "none") tracks?.draw(pass); // under the points
       if (stationsBox.checked) {
         accessLines.draw(pass);

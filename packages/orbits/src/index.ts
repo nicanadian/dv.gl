@@ -25,3 +25,4 @@ export * from "./ephemerisSource.js";
 export * from "./footprint.js";
 export * from "./oem.js";
 export * from "./propagation.js";
+export * from "./revisit.js";

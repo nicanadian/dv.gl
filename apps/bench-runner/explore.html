@@ -18,6 +18,12 @@
              align-items: center; padding: 12px 18px; background: rgba(16,20,38,0.95);
              border-top: 1px solid #35406b; z-index: 9; }
       #bar label { color: #8da2d8; font: 12px monospace; white-space: nowrap; }
+      #covLegend { position: fixed; left: 8px; bottom: 70px; z-index: 9; display: none;
+                   font: 11px monospace; color: #b7c4e6; background: rgba(16,20,38,0.9);
+                   border: 1px solid #35406b; border-radius: 6px; padding: 7px 9px; width: 178px; }
+      #covLegend .ramp { height: 8px; border-radius: 2px; margin: 5px 0 2px;
+                         background: linear-gradient(90deg,#440154,#3b528b,#21918c,#5ec962,#fde725); }
+      #covLegend .ends { display: flex; justify-content: space-between; color: #8da2d8; }
       #timeMarks { position: fixed; height: 7px; z-index: 10; pointer-events: none; }
       #timeMarks .tick { position: absolute; width: 2px; height: 7px; transform: translateX(-1px); border-radius: 1px; }
       #time { flex: 1; height: 22px; accent-color: #6ab7ff; cursor: pointer; }
@@ -52,6 +58,11 @@
     <div id="status">loading...</div>
     <div id="clock"></div>
     <div id="pick"></div>
+    <div id="covLegend">
+      <span>coverage &middot; h since last look</span>
+      <div class="ramp"></div>
+      <div class="ends"><span>fresh 0</span><span>6h+ stale</span></div>
+    </div>
     <div id="timeMarks"></div>
     <div id="objects" class="panel"><div id="objectsHead" class="panelHead">&#9662; mission objects</div><div id="objectsBody" class="panelBody"></div></div>
     <div id="layers" class="panel"><div id="layersHead" class="panelHead">&#9662; layers</div>
