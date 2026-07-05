@@ -206,7 +206,7 @@ async function makeWorkerSource(catalogText: string, multiplier: number): Promis
   let inFlight = false;
   let pending: number | undefined;
   let windowInFlight = false;
-  let windowPending: { c: number; s: number; e?: number } | undefined;
+  let windowPending: { c: number; s: number; e: number | undefined } | undefined;
   const api: AsyncSource = {
     label: "satellite.js CPU worker (fp64, transferable buffers)",
     count: ready.count,
