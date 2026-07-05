@@ -1,0 +1,78 @@
+{
+ "cleansheet-x1": {
+  "n": 15918,
+  "passes": 3,
+  "scrub_all": [
+   17.5,
+   18.4,
+   17.6
+  ],
+  "scrub_med": 17.59999990463257,
+  "frame_med": 17.5,
+  "min_frames": 3601,
+  "min_closed": 33
+ },
+ "cleansheet-x4": {
+  "n": 63672,
+  "passes": 3,
+  "scrub_all": [
+   35.4,
+   35.3,
+   48.5
+  ],
+  "scrub_med": 35.40000009536743,
+  "frame_med": 18.40000009536743,
+  "min_frames": 3600,
+  "min_closed": 33
+ },
+ "cleansheet-x8": {
+  "n": 127344,
+  "passes": 1,
+  "scrub_all": [
+   68.6
+  ],
+  "scrub_med": 68.59999990463257,
+  "frame_med": 18.40000009536743,
+  "min_frames": 3601,
+  "min_closed": 33
+ },
+ "composed-x1": {
+  "n": 15918,
+  "passes": 3,
+  "scrub_all": [
+   107.1,
+   102.2,
+   104.5
+  ],
+  "scrub_med": 104.5,
+  "frame_med": 22.59999990463257,
+  "min_frames": 3055,
+  "min_closed": 33
+ },
+ "composed-x4": {
+  "n": 63672,
+  "passes": 3,
+  "scrub_all": [
+   128.7,
+   202.2,
+   123.8
+  ],
+  "scrub_med": 128.69999980926514,
+  "frame_med": 24.800000190734863,
+  "min_frames": 2680,
+  "min_closed": 33
+ },
+ "composed-x8": {
+  "n": 127344,
+  "passes": 3,
+  "scrub_all": [
+   242.7,
+   242.9,
+   242
+  ],
+  "scrub_med": 242.69999980926514,
+  "frame_med": 22.399999618530273,
+  "min_frames": 2911,
+  "min_closed": 32
+ }
+}
