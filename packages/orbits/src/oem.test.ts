@@ -106,3 +106,21 @@ describe("EphemerisSource", () => {
     expect(Number.isFinite(out[3] ?? Number.NaN)).toBe(true);
   });
 });
+
+describe("sampleWindowInto (orbit tracks)", () => {
+  it("EphemerisSource: middle sample equals the propagateInto position; ends clamp to span", () => {
+    const source = new EphemerisSource(parseOem(SAMPLE).segments);
+    const S = 5;
+    const window = new Float32Array(source.count * S * 3);
+    source.sampleWindowInto(1, S, window); // center t=1min
+    const direct = new Float32Array(source.count * 3);
+    source.propagateInto(1, direct);
+    // sat1 middle sample (index 2) == direct evaluation
+    const mid = (0 * S + 2) * 3;
+    expect(window[mid]).toBeCloseTo(direct[0] ?? Number.NaN, 4);
+    expect(window[mid + 1]).toBeCloseTo(direct[1] ?? Number.NaN, 4);
+    // sat1 last sample clamps to its span end (t=2min sample), never extrapolates
+    const last = (0 * S + S - 1) * 3;
+    expect(window[last]).toBeCloseTo(6813.5966, 3);
+  });
+});

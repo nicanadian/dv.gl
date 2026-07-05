@@ -29,7 +29,12 @@ interface PropagateMsg {
   readonly type: "propagate";
   readonly minutes: number;
 }
-type InMsg = InitMsg | PropagateMsg;
+interface WindowMsg {
+  readonly type: "sampleWindow";
+  readonly centerMinutes: number;
+  readonly samples: number;
+}
+type InMsg = InitMsg | PropagateMsg | WindowMsg;
 
 let source: SatelliteJsSource | undefined;
 
@@ -44,6 +49,16 @@ self.onmessage = (e: MessageEvent<InMsg>) => {
       count: source.count,
       rejected: source.rejected.length,
     });
+    return;
+  }
+  if (msg.type === "sampleWindow") {
+    if (source === undefined) throw new Error("worker: sampleWindow before init");
+    const window = new Float32Array(source.count * msg.samples * 3);
+    source.sampleWindowInto(msg.centerMinutes, msg.samples, window);
+    self.postMessage(
+      { type: "window", centerMinutes: msg.centerMinutes, samples: msg.samples, window },
+      { transfer: [window.buffer] },
+    );
     return;
   }
   if (msg.type === "propagate") {

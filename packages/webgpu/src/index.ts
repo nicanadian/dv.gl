@@ -20,6 +20,7 @@ export function isWebGpuAvailable(nav: unknown = globalThis.navigator): boolean 
 }
 
 export * from "./earth.js";
+export * from "./orbitTracks.js";
 export * from "./points.js";
 export * from "./rte.js";
 export * from "./trails.js";

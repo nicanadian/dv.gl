@@ -153,3 +153,31 @@ describe("workload replication", () => {
     expect(new SatelliteJsSource([obj], undefined, {}).count).toBe(1);
   });
 });
+
+describe("sampleWindowInto (SGP4 orbit tracks)", () => {
+  const obj = { name: "LEO", line1: FIXTURE.line1, line2: FIXTURE.line2 };
+
+  it("period comes from the mean motion and the window closes on itself", () => {
+    const source = new SatelliteJsSource([obj]);
+    const period = source.periodMinutes(0);
+    expect(period).toBeGreaterThan(90); // ~420 km orbit
+    expect(period).toBeLessThan(96);
+    const S = 129;
+    const window = new Float32Array(S * 3);
+    source.sampleWindowInto(500, S, window);
+    // middle sample == direct propagation at the center epoch
+    const direct = new Float32Array(3);
+    source.propagateInto(500, direct);
+    const mid = ((S - 1) / 2) * 3;
+    expect(window[mid]).toBeCloseTo(direct[0] ?? Number.NaN, 3);
+    // +/- one full period: first and last samples land near the same point
+    // (J2 drift over 2 revs keeps them within a few tens of km, not identical)
+    const d = Math.hypot(
+      (window[0] ?? 0) - (window[(S - 1) * 3] ?? 0),
+      (window[1] ?? 0) - (window[(S - 1) * 3 + 1] ?? 0),
+      (window[2] ?? 0) - (window[(S - 1) * 3 + 2] ?? 0),
+    );
+    expect(d).toBeLessThan(100);
+    expect(() => source.sampleWindowInto(0, S, new Float32Array(3))).toThrow(/too small/);
+  });
+});

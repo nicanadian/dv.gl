@@ -35,6 +35,13 @@ export interface PropagationSource {
   /** Number of objects this source was initialized with. */
   readonly count: number;
   /**
+   * Evaluate every object across a time window of +/- one orbital period around
+   * `centerMinutes`, `samples` points per object (odd; the middle sample is the
+   * center). Writes [object][sample][xyz] km, stride 3, into `out`
+   * (length >= count*samples*3). Optional: not every source can afford it.
+   */
+  sampleWindowInto?(centerMinutes: number, samples: number, out: Float32Array): void;
+  /**
    * Write TEME positions (km) at `minutesSinceEpoch` into `out` with stride 3
    * (x,y,z per object, in catalog order). Objects that fail to propagate are
    * written as NaN and counted in the return value's `failed`.
@@ -140,6 +147,41 @@ export class SatelliteJsSource implements PropagationSource {
       }
     }
     return { written, failed };
+  }
+
+  /** Orbital period of object k, minutes (exact, from the mean motion). */
+  periodMinutes(k: number): number {
+    const rec = this.recs[k];
+    if (rec === undefined) return Number.NaN;
+    return (2 * Math.PI) / rec.satrec.no;
+  }
+
+  /** +/- one period around centerMinutes, `samples` points per object. */
+  sampleWindowInto(centerMinutes: number, samples: number, out: Float32Array): void {
+    const n = this.recs.length;
+    if (out.length < n * samples * 3) {
+      throw new Error(`window buffer too small: need ${n * samples * 3}`);
+    }
+    for (let k = 0; k < n; k += 1) {
+      const rec = this.recs[k];
+      if (rec === undefined) continue;
+      const period = (2 * Math.PI) / rec.satrec.no;
+      for (let s = 0; s < samples; s += 1) {
+        const frac = (s / (samples - 1)) * 2 - 1; // [-1, 1]
+        const t = centerMinutes + rec.epochOffsetMinutes + frac * period;
+        const pos = readPosition(satellite.sgp4(rec.satrec, t));
+        const base = (k * samples + s) * 3;
+        if (pos === undefined) {
+          out[base] = Number.NaN;
+          out[base + 1] = Number.NaN;
+          out[base + 2] = Number.NaN;
+        } else {
+          out[base] = pos.x;
+          out[base + 1] = pos.y;
+          out[base + 2] = pos.z;
+        }
+      }
+    }
   }
 }
 

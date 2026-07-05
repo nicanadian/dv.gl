@@ -97,7 +97,39 @@ export class EphemerisSource implements PropagationSource {
     }
     return { written, failed };
   }
+
+  /**
+   * +/- one (radius-estimated, circular-approx) period around centerMinutes,
+   * clamped to each segment's data span -- a track that stops at the boundary of
+   * the ephemeris is honest; extrapolating it would not be.
+   */
+  sampleWindowInto(centerMinutes: number, samples: number, out: Float32Array): void {
+    const n = this.entries.length;
+    if (out.length < n * samples * 3) {
+      throw new Error(`window buffer too small: need ${n * samples * 3}`);
+    }
+    const centerSec = centerMinutes * 60;
+    for (let k = 0; k < n; k += 1) {
+      const e = this.entries[k];
+      if (e === undefined) continue;
+      // instantaneous radius -> circular-approx period (documented approximation)
+      e.track.sampleInto(Math.min(Math.max(centerSec, e.startSec), e.endSec), this.scratch);
+      const r = Math.hypot(this.scratch[0] ?? 0, this.scratch[1] ?? 0, this.scratch[2] ?? 0);
+      const periodSec = 2 * Math.PI * Math.sqrt((r * r * r) / MU_EARTH);
+      for (let s = 0; s < samples; s += 1) {
+        const frac = (s / (samples - 1)) * 2 - 1;
+        const tSec = Math.min(Math.max(centerSec + frac * periodSec, e.startSec), e.endSec);
+        e.track.sampleInto(tSec, this.scratch);
+        const base = (k * samples + s) * 3;
+        out[base] = this.scratch[0] ?? Number.NaN;
+        out[base + 1] = this.scratch[1] ?? Number.NaN;
+        out[base + 2] = this.scratch[2] ?? Number.NaN;
+      }
+    }
+  }
 }
+
+const MU_EARTH = 398_600.4418; // km^3/s^2
 
 function shiftTimes(times: Float64Array, offsetSec: number): Float64Array {
   const out = new Float64Array(times.length);

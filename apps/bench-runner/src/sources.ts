@@ -49,7 +49,27 @@ export interface AsyncSource {
   /** Request evaluation at scene time (minutes). Latest request wins. */
   request(minutes: number): void;
   onResult?: (positions: Float32Array, minutes: number, failed: number) => void;
+  /**
+   * Request +/-1-orbit track windows for every object (samples points each),
+   * centered on scene time. Optional: absent when the source can't afford it.
+   * Latest request wins; delivery via onWindow.
+   */
+  requestWindow?(centerMinutes: number, samples: number): void;
+  onWindow?: (windowKm: Float32Array, centerMinutes: number, samples: number) => void;
   dispose(): void;
+}
+
+/** Wrap a synchronous PropagationSource window sweep in the async seam. */
+function syncWindow(
+  api: AsyncSource,
+  inner: { sampleWindowInto?(c: number, s: number, out: Float32Array): void; count: number },
+): ((centerMinutes: number, samples: number) => void) | undefined {
+  if (!inner.sampleWindowInto) return undefined;
+  return (centerMinutes: number, samples: number): void => {
+    const window = new Float32Array(inner.count * samples * 3);
+    inner.sampleWindowInto?.(centerMinutes, samples, window);
+    api.onWindow?.(window, centerMinutes, samples);
+  };
 }
 
 export async function loadCatalogText(): Promise<{
@@ -114,6 +134,8 @@ async function makeOemSource(): Promise<AsyncSource> {
     },
     dispose(): void {},
   };
+  const windowFn = syncWindow(api, inner);
+  if (windowFn) api.requestWindow = windowFn;
   return api;
 }
 
@@ -138,6 +160,8 @@ async function makeCzmlSource(): Promise<AsyncSource> {
     },
     dispose(): void {},
   };
+  const windowFn = syncWindow(api, inner);
+  if (windowFn) api.requestWindow = windowFn;
   return api;
 }
 
@@ -159,6 +183,8 @@ function makeMainSource(catalogText: string, multiplier: number): AsyncSource {
     },
     dispose(): void {},
   };
+  const windowFn = syncWindow(api, inner);
+  if (windowFn) api.requestWindow = windowFn;
   return api;
 }
 
@@ -176,6 +202,8 @@ async function makeWorkerSource(catalogText: string, multiplier: number): Promis
 
   let inFlight = false;
   let pending: number | undefined;
+  let windowInFlight = false;
+  let windowPending: { c: number; s: number } | undefined;
   const api: AsyncSource = {
     label: "satellite.js CPU worker (fp64, transferable buffers)",
     count: ready.count,
@@ -188,12 +216,38 @@ async function makeWorkerSource(catalogText: string, multiplier: number): Promis
       inFlight = true;
       worker.postMessage({ type: "propagate", minutes });
     },
+    requestWindow(centerMinutes: number, samples: number): void {
+      if (windowInFlight) {
+        windowPending = { c: centerMinutes, s: samples };
+        return;
+      }
+      windowInFlight = true;
+      worker.postMessage({ type: "sampleWindow", centerMinutes, samples });
+    },
     dispose(): void {
       worker.terminate();
     },
   };
   worker.onmessage = (e) => {
-    const msg = e.data as { type: string; minutes: number; failed: number; positions: Float32Array };
+    const msg = e.data as {
+      type: string;
+      minutes: number;
+      failed: number;
+      positions: Float32Array;
+      centerMinutes: number;
+      samples: number;
+      window: Float32Array;
+    };
+    if (msg.type === "window") {
+      windowInFlight = false;
+      api.onWindow?.(msg.window, msg.centerMinutes, msg.samples);
+      if (windowPending !== undefined) {
+        const next = windowPending;
+        windowPending = undefined;
+        api.requestWindow?.(next.c, next.s);
+      }
+      return;
+    }
     if (msg.type !== "result") return;
     inFlight = false;
     api.onResult?.(msg.positions, msg.minutes, msg.failed);

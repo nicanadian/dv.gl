@@ -21,7 +21,7 @@
  */
 import { MissionClock } from "@dvgl/core";
 import { gmst } from "@dvgl/frames";
-import { EarthRenderer, PointRenderer, TrailRenderer } from "@dvgl/webgpu";
+import { EarthRenderer, OrbitTrackRenderer, PointRenderer } from "@dvgl/webgpu";
 import { catalogEpochMs, parseCatalog } from "@dvgl/orbits";
 import { loadCatalogText, makeSource, readVariant } from "./sources.js";
 
@@ -129,7 +129,11 @@ async function main(): Promise<void> {
     const catalog = await loadCatalogText();
     const source = await makeSource(mode, catalog.text, multiplier);
     let renderer: PointRenderer | undefined;
-    let trails: TrailRenderer | undefined;
+    let tracks: OrbitTrackRenderer | undefined;
+    const TRACK_SAMPLES = 129;
+    // full-catalog windows are count*samples SGP4 evals; gate to fleet-scale sets
+    const tracksAffordable = source.requestWindow !== undefined && source.count <= 512;
+    let lastWindowCenterMin = Number.NEGATIVE_INFINITY;
 
     const view: View = { lonDeg: -75, latDeg: 25, rangeKm: 45_000 };
 
@@ -160,10 +164,6 @@ async function main(): Promise<void> {
     source.onResult = (positions, minutes, failed) => {
       renderer ??= new PointRenderer(device, { capacity: source.count, format, depthFormat });
       renderer.updatePositions(positions, source.count);
-      if (trailsBox.checked) {
-        trails ??= new TrailRenderer(device, { capacity: source.count, format, depthFormat });
-        trails.push(positions, source.count);
-      }
       const d = Math.floor(minutes / 1440);
       const h = Math.floor((minutes % 1440) / 60);
       const m = Math.floor(minutes % 60);
@@ -211,7 +211,7 @@ async function main(): Promise<void> {
       clock.scrubTo(Number(slider.value) * 60);
       clock.pause();
       playBtn.textContent = "play";
-      trails?.reset(); // discontinuity: the trail regrows from here
+      lastWindowCenterMin = Number.NEGATIVE_INFINITY; // tracks recompute at the new time
       dirty = true;
     });
     playBtn.addEventListener("click", () => {
@@ -223,8 +223,25 @@ async function main(): Promise<void> {
       clock.rate = Number(speedSel.value);
     });
     const ecefBox = document.getElementById("ecef") as HTMLInputElement;
-    const trailsBox = document.getElementById("trails") as HTMLInputElement;
-    trailsBox.addEventListener("change", () => trails?.reset());
+    const tracksBox = document.getElementById("tracks") as HTMLInputElement;
+    if (!tracksAffordable) {
+      tracksBox.disabled = true;
+      (tracksBox.parentElement as HTMLElement).title =
+        "orbit tracks need a window-capable source and <=512 objects";
+    }
+    tracksBox.addEventListener("change", () => {
+      if (!tracksBox.checked) tracks?.clear();
+      lastWindowCenterMin = Number.NEGATIVE_INFINITY;
+    });
+    source.onWindow = (windowKm, _centerMinutes, samples) => {
+      tracks ??= new OrbitTrackRenderer(device, {
+        capacity: source.count,
+        samples,
+        format,
+        depthFormat,
+      });
+      tracks.setWindow(windowKm, source.count);
+    };
 
     let lastT = performance.now();
     const tick = (): void => {
@@ -241,6 +258,15 @@ async function main(): Promise<void> {
         source.request(clock.currentSeconds / 60);
         dirty = false;
       }
+      // sliding +/-1-orbit window: recompute when scene time drifts ~1/8 of a
+      // LEO period from the last window center (or after a scrub reset)
+      if (tracksBox.checked && tracksAffordable) {
+        const centerMin = clock.currentSeconds / 60;
+        if (Math.abs(centerMin - lastWindowCenterMin) > 12) {
+          lastWindowCenterMin = centerMin;
+          source.requestWindow?.(centerMin, TRACK_SAMPLES);
+        }
+      }
 
       // earth-fixed: co-rotate the camera with Earth so ECEF geometry (GEO belt,
       // ground tracks) holds still while inertial orbits sweep past. The globe
@@ -252,7 +278,7 @@ async function main(): Promise<void> {
       const viewProjRte = mul(proj, lookAtRte(eye));
       earth.updateCamera(viewProjRte, eye, gmstRad);
       renderer?.updateCamera(viewProjRte, eye, canvas.width, canvas.height);
-      if (trailsBox.checked) trails?.updateCamera(viewProjRte, eye);
+      if (tracksBox.checked) tracks?.updateCamera(viewProjRte, eye);
 
       const encoder = device.createCommandEncoder();
       const pass = encoder.beginRenderPass({
@@ -272,7 +298,7 @@ async function main(): Promise<void> {
         },
       });
       earth.draw(pass); // writes depth: satellites occlude behind the planet
-      if (trailsBox.checked) trails?.draw(pass); // under the points
+      if (tracksBox.checked) tracks?.draw(pass); // under the points
       renderer?.draw(pass);
       pass.end();
       device.queue.submit([encoder.finish()]);
