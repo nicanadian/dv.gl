@@ -163,8 +163,7 @@ async function main(): Promise<void> {
     let pickPending = false;
     let pickMapping = false;
     let hoveredIndex = -1;
-    const selected = new Set<number>(); // pinned satellites -> show their access envelope
-    let afterColors: () => void = () => {}; // re-applies hover/selection highlights after a base recolor
+    let afterColors: () => void = () => {}; // re-applies the hover highlight after a base recolor
     const pickEl = document.getElementById("pick") as HTMLElement;
 
     say("loading catalog...");
@@ -353,11 +352,10 @@ async function main(): Promise<void> {
     const fpSeg = new Float32Array(source.count * FP_OUTLINE_SEG * 2 * 3);
     const fpCol = new Float32Array(source.count * FP_OUTLINE_SEG * 2 * 4);
 
-    // Access layer: the field-of-regard ENVELOPE -- everywhere a sensor COULD
-    // steer to (not where it is pointed, and NOT "coverage"). Same swath primitive
-    // widened to the full steering limits, shown only for selected satellites so it
-    // never becomes wallpaper. Fainter fill than the footprint; access "could see"
-    // must never be mistaken for coverage "did see".
+    // Field-of-regard ENVELOPE -- everywhere a sensor COULD steer to (not where it
+    // is pointed, and NOT "coverage"). Same swath primitive widened to the full
+    // steering limits, drawn faintly for every visible satellite (narrow via the
+    // family filter). "Could see" must never be mistaken for coverage "did see".
     const ACCESS: Record<string, SwathOptions> = {
       SAR: { side: "right", innerOffNadirDeg: 15, outerOffNadirDeg: 50, alongHalfDeg: 5, segments: SWATH_SEG },
       EO: { side: "both", innerOffNadirDeg: 0, outerOffNadirDeg: 45, alongHalfDeg: 5, segments: SWATH_SEG },
@@ -767,14 +765,10 @@ async function main(): Promise<void> {
     let dragging = false;
     let lastX = 0;
     let lastY = 0;
-    let downX = 0;
-    let downY = 0;
     canvas.addEventListener("pointerdown", (e) => {
       dragging = true;
       lastX = e.clientX;
       lastY = e.clientY;
-      downX = e.clientX;
-      downY = e.clientY;
       canvas.setPointerCapture(e.pointerId);
     });
     canvas.addEventListener("pointermove", (e) => {
@@ -792,37 +786,18 @@ async function main(): Promise<void> {
       pickPending = false;
       setHover(-1);
     });
-    // Re-tint the points for hover + pinned selection, and drive the readout.
-    // Pinned sats (whose access envelope shows) stay brightened even when not
-    // hovered, so a click has visible, persistent feedback; hovered = full white.
+    // Hover identify: white-boost the point under the cursor and show its name.
+    // (Field of regard is driven by the family filter, not per-sat selection.)
     const nameOf = (i: number): string => source.names?.[i] ?? `object ${i}`;
     const refreshHighlights = (): void => {
       if (colors) {
         const c = new Float32Array(colors);
-        for (const k of selected) {
-          if ((colors[k * 4 + 3] ?? 1) === 0) continue; // filtered out
-          c[k * 4] = Math.min(1, (colors[k * 4] ?? 0) * 0.35 + 0.65);
-          c[k * 4 + 1] = Math.min(1, (colors[k * 4 + 1] ?? 0) * 0.35 + 0.65);
-          c[k * 4 + 2] = Math.min(1, (colors[k * 4 + 2] ?? 0) * 0.35 + 0.65);
-        }
         if (hoveredIndex >= 0) c.set([1, 1, 1, colors[hoveredIndex * 4 + 3] ?? 1], hoveredIndex * 4);
         renderer?.setColors(c);
       }
-      // readout: hovered name (+ pin hint), else the pinned set, else an access hint
       if (hoveredIndex >= 0) {
-        const hint = accessBox.checked
-          ? selected.has(hoveredIndex)
-            ? " · click to unpin"
-            : " · click for field of regard"
-          : "";
         pickEl.style.display = "block";
-        pickEl.textContent = nameOf(hoveredIndex) + hint;
-      } else if (accessBox.checked && selected.size > 0) {
-        pickEl.style.display = "block";
-        pickEl.textContent = `field of regard · ${[...selected].map(nameOf).join(", ")}`;
-      } else if (accessBox.checked) {
-        pickEl.style.display = "block";
-        pickEl.textContent = "field of regard: click a satellite to show where it can steer";
+        pickEl.textContent = nameOf(hoveredIndex);
       } else {
         pickEl.style.display = "none";
       }
@@ -833,15 +808,8 @@ async function main(): Promise<void> {
       hoveredIndex = idx;
       refreshHighlights();
     };
-    accessBox.addEventListener("change", refreshHighlights);
-    canvas.addEventListener("pointerup", (e) => {
+    canvas.addEventListener("pointerup", () => {
       dragging = false;
-      // a click (not a drag) on a satellite pins/unpins it for the access layer
-      if (Math.hypot(e.clientX - downX, e.clientY - downY) < 5 && hoveredIndex >= 0) {
-        if (selected.has(hoveredIndex)) selected.delete(hoveredIndex);
-        else selected.add(hoveredIndex);
-        refreshHighlights();
-      }
     });
     canvas.addEventListener(
       "wheel",
@@ -1160,12 +1128,12 @@ async function main(): Promise<void> {
         headingLines.updateCamera(viewProjRte, eye);
       }
 
-      // Access ENVELOPE (field of regard) for pinned/hovered satellites -- wide,
-      // faint fill. Drawn under the footprint so "could see" sits beneath "pointed".
-      if (accessBox.checked && (selected.size > 0 || hoveredIndex >= 0)) {
-        const inc = (k: number): boolean =>
-          (selected.has(k) || k === hoveredIndex) && !(colors && (colors[k * 4 + 3] ?? 1) === 0);
-        const r = buildSwaths(inc, accessFor, accessTriPos, accessTriCol, acSeg, acCol, 0.16, 0.75);
+      // FIELD OF REGARD envelope: the wide, faint band each sensor could steer to.
+      // Drawn for every visible satellite (narrow it via the family filter in the
+      // objects panel), under the footprint so "could see" sits beneath "pointed".
+      if (accessBox.checked) {
+        const inc = (k: number): boolean => !(colors && (colors[k * 4 + 3] ?? 1) === 0);
+        const r = buildSwaths(inc, accessFor, accessTriPos, accessTriCol, acSeg, acCol, 0.13, 0.55);
         accessFill.setTriangles(accessTriPos, accessTriCol, r.tris);
         accessFill.updateCamera(viewProjRte, eye);
         accessLineR.setSegments(acSeg, acCol, r.segs);
