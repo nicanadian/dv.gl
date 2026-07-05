@@ -164,6 +164,7 @@ async function main(): Promise<void> {
     let pickMapping = false;
     let hoveredIndex = -1;
     const selected = new Set<number>(); // pinned satellites -> show their access envelope
+    let afterColors: () => void = () => {}; // re-applies hover/selection highlights after a base recolor
     const pickEl = document.getElementById("pick") as HTMLElement;
 
     say("loading catalog...");
@@ -241,6 +242,7 @@ async function main(): Promise<void> {
         renderer?.setColors(colors);
         tracks?.setColors(colors);
       }
+      afterColors(); // keep pinned/hovered highlights after a family-filter change
     };
     // layers dock (top-left, collapsible): view mode + overlay toggles live here,
     // so the bottom bar is pure transport and the timeline keeps its full width.
@@ -790,29 +792,55 @@ async function main(): Promise<void> {
       pickPending = false;
       setHover(-1);
     });
-    // hovered object: white-boost the point + show its name (mechanism dv.gl
-    // provides the id; naming/highlight policy lives here in the app)
-    const setHover = (idx: number): void => {
-      if (idx === hoveredIndex) return;
-      hoveredIndex = idx;
+    // Re-tint the points for hover + pinned selection, and drive the readout.
+    // Pinned sats (whose access envelope shows) stay brightened even when not
+    // hovered, so a click has visible, persistent feedback; hovered = full white.
+    const nameOf = (i: number): string => source.names?.[i] ?? `object ${i}`;
+    const refreshHighlights = (): void => {
       if (colors) {
-        const boosted = new Float32Array(colors);
-        if (idx >= 0) boosted.set([1, 1, 1, boosted[idx * 4 + 3] ?? 1], idx * 4);
-        renderer?.setColors(boosted);
+        const c = new Float32Array(colors);
+        for (const k of selected) {
+          if ((colors[k * 4 + 3] ?? 1) === 0) continue; // filtered out
+          c[k * 4] = Math.min(1, (colors[k * 4] ?? 0) * 0.35 + 0.65);
+          c[k * 4 + 1] = Math.min(1, (colors[k * 4 + 1] ?? 0) * 0.35 + 0.65);
+          c[k * 4 + 2] = Math.min(1, (colors[k * 4 + 2] ?? 0) * 0.35 + 0.65);
+        }
+        if (hoveredIndex >= 0) c.set([1, 1, 1, colors[hoveredIndex * 4 + 3] ?? 1], hoveredIndex * 4);
+        renderer?.setColors(c);
       }
-      if (idx >= 0) {
+      // readout: hovered name (+ pin hint), else the pinned set, else an access hint
+      if (hoveredIndex >= 0) {
+        const hint = accessBox.checked
+          ? selected.has(hoveredIndex)
+            ? " · click to unpin"
+            : " · click to pin access"
+          : "";
         pickEl.style.display = "block";
-        pickEl.textContent = source.names?.[idx] ?? `object ${idx}`;
+        pickEl.textContent = nameOf(hoveredIndex) + hint;
+      } else if (accessBox.checked && selected.size > 0) {
+        pickEl.style.display = "block";
+        pickEl.textContent = `access · ${[...selected].map(nameOf).join(", ")}`;
+      } else if (accessBox.checked) {
+        pickEl.style.display = "block";
+        pickEl.textContent = "access: click a satellite to show where it can steer";
       } else {
         pickEl.style.display = "none";
       }
     };
+    afterColors = refreshHighlights;
+    const setHover = (idx: number): void => {
+      if (idx === hoveredIndex) return;
+      hoveredIndex = idx;
+      refreshHighlights();
+    };
+    accessBox.addEventListener("change", refreshHighlights);
     canvas.addEventListener("pointerup", (e) => {
       dragging = false;
       // a click (not a drag) on a satellite pins/unpins it for the access layer
       if (Math.hypot(e.clientX - downX, e.clientY - downY) < 5 && hoveredIndex >= 0) {
         if (selected.has(hoveredIndex)) selected.delete(hoveredIndex);
         else selected.add(hoveredIndex);
+        refreshHighlights();
       }
     });
     canvas.addEventListener(
@@ -1137,7 +1165,7 @@ async function main(): Promise<void> {
       if (accessBox.checked && (selected.size > 0 || hoveredIndex >= 0)) {
         const inc = (k: number): boolean =>
           (selected.has(k) || k === hoveredIndex) && !(colors && (colors[k * 4 + 3] ?? 1) === 0);
-        const r = buildSwaths(inc, accessFor, accessTriPos, accessTriCol, acSeg, acCol, 0.12, 0.55);
+        const r = buildSwaths(inc, accessFor, accessTriPos, accessTriCol, acSeg, acCol, 0.16, 0.75);
         accessFill.setTriangles(accessTriPos, accessTriCol, r.tris);
         accessFill.updateCamera(viewProjRte, eye);
         accessLineR.setSegments(acSeg, acCol, r.segs);
