@@ -335,6 +335,102 @@ async function main(): Promise<void> {
     const covPos = new Float32Array(90 * 180 * 3);
     const covCol = new Float32Array(90 * 180 * 4);
 
+    // V9 2D equirectangular map: the same clock + data on a flat lon/lat plane.
+    // Plane coords: x = lon/90 in [-2,2], y = lat/90 in [-1,1]. No depth (flat).
+    const map2dBox = document.getElementById("map2d") as HTMLInputElement;
+    const mapPts = new PointRenderer(device, { capacity: source.count, format, pointSizePx: 4 });
+    const mapCov = new PointRenderer(device, { capacity: 90 * 180, format, pointSizePx: 3 });
+    const mapGrat = new LineRenderer(device, { capacity: 4096, format });
+    const mapPos = new Float32Array(source.count * 3);
+    // static graticule (30deg grid + border)
+    {
+      const seg: number[] = [];
+      const col: number[] = [];
+      const push = (x0: number, y0: number, x1: number, y1: number, a: number): void => {
+        seg.push(x0, y0, 0, x1, y1, 0);
+        col.push(0.22, 0.38, 0.55, a, 0.22, 0.38, 0.55, a);
+      };
+      for (let lon = -180; lon <= 180; lon += 30) push(lon / 90, -1, lon / 90, 1, lon === 0 ? 0.7 : 0.4);
+      for (let lat = -90; lat <= 90; lat += 30) push(-2, lat / 90, 2, lat / 90, lat === 0 ? 0.7 : 0.4);
+      mapGrat.setSegments(new Float32Array(seg), new Float32Array(col), seg.length / 6);
+    }
+    const orthoViewProj = (): Float32Array => {
+      const a = canvas.width / canvas.height;
+      const sy = Math.min(0.95, 0.475 * a);
+      const sx = sy / a;
+      const m = new Float32Array(16);
+      m[0] = sx;
+      m[5] = sy;
+      m[15] = 1;
+      return m;
+    };
+    const draw2D = (): void => {
+      const vp = orthoViewProj();
+      const eye0: [number, number, number] = [0, 0, 0];
+      // fleet sub-satellite dots
+      const theta = gmst(clock.currentUnixMs());
+      const cc = Math.cos(theta);
+      const ss = Math.sin(theta);
+      let n = 0;
+      if (latestPositions) {
+        for (let k = 0; k < source.count; k += 1) {
+          const x = latestPositions[k * 3] ?? Number.NaN;
+          const y = latestPositions[k * 3 + 1] ?? Number.NaN;
+          const z = latestPositions[k * 3 + 2] ?? Number.NaN;
+          if (!Number.isFinite(x)) {
+            mapPos[k * 3] = 1e12;
+            mapPos[k * 3 + 1] = 1e12;
+            mapPos[k * 3 + 2] = 1e12;
+            continue;
+          }
+          const g = ecefToGeodetic(cc * x + ss * y, -ss * x + cc * y, z);
+          mapPos[k * 3] = g.lonDeg / 90;
+          mapPos[k * 3 + 1] = g.latDeg / 90;
+          mapPos[k * 3 + 2] = 0;
+          n = k + 1;
+        }
+      }
+      mapPts.updatePositions(mapPos, source.count);
+      if (colors) mapPts.setColors(colors);
+      mapPts.updateCamera(vp, eye0, canvas.width, canvas.height);
+      mapGrat.updateCamera(vp, eye0);
+      let cv = 0;
+      if (coverageBox.checked) {
+        const maxV = coverage.max() || 1;
+        coverage.forEachCovered((lat, lon, v) => {
+          covPos[cv * 3] = lon / 90;
+          covPos[cv * 3 + 1] = lat / 90;
+          covPos[cv * 3 + 2] = 0;
+          const c = heat(Math.min(1, v / maxV));
+          covCol[cv * 4] = c[0];
+          covCol[cv * 4 + 1] = c[1];
+          covCol[cv * 4 + 2] = c[2];
+          covCol[cv * 4 + 3] = 0.7;
+          cv += 1;
+        });
+        mapCov.updatePositions(covPos, cv);
+        mapCov.setColors(covCol.subarray(0, cv * 4));
+        mapCov.updateCamera(vp, eye0, canvas.width, canvas.height);
+      }
+      void n;
+      const enc = device.createCommandEncoder();
+      const pass = enc.beginRenderPass({
+        colorAttachments: [
+          {
+            view: context.getCurrentTexture().createView(),
+            clearValue: { r: 0.02, g: 0.03, b: 0.06, a: 1 },
+            loadOp: "clear",
+            storeOp: "store",
+          },
+        ],
+      });
+      mapGrat.draw(pass);
+      if (coverageBox.checked) mapCov.draw(pass);
+      mapPts.draw(pass);
+      pass.end();
+      device.queue.submit([enc.finish()]);
+    };
+
     // V8 labels: declutter-aware DOM name tags. dv.gl decides which fit
     // (declutterLabels); the app owns the text/style. Gated to fleet-scale sets.
     const labelsBox = document.getElementById("labels") as HTMLInputElement;
@@ -632,6 +728,14 @@ async function main(): Promise<void> {
           // ECEF window (per-sample GMST) gives the weave / the ground track
           source.requestWindow?.(centerMin, TRACK_SAMPLES, trackEcef() ? clock.epochMs : undefined);
         }
+      }
+
+      // V9: flat equirectangular map replaces the 3D scene entirely
+      if (map2dBox.checked) {
+        for (const el of labelEls) el.style.display = "none";
+        draw2D();
+        requestAnimationFrame(tick);
+        return;
       }
 
       // earth-fixed: co-rotate the camera with Earth so ECEF geometry (GEO belt,
