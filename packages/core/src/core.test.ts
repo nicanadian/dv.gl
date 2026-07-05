@@ -15,6 +15,7 @@
  */
 import { describe, expect, it } from "vitest";
 import { MissionClock } from "./clock.js";
+import { declutterLabels } from "./declutter.js";
 import { IntervalSet } from "./intervals.js";
 import { TimelineMarks } from "./marks.js";
 import { SampledTrack } from "./track.js";
@@ -218,5 +219,29 @@ describe("TimelineMarks", () => {
     expect(marks.next(300)).toBeUndefined(); // nothing after the last
     expect(marks.prev(300)?.timeSec).toBe(200);
     expect(marks.prev(100)).toBeUndefined();
+  });
+});
+
+describe("declutterLabels", () => {
+  it("higher priority wins an overlap; non-overlapping both show", () => {
+    const vis = declutterLabels([
+      { x: 0, y: 0, w: 40, h: 12, priority: 1 },
+      { x: 10, y: 5, w: 40, h: 12, priority: 5 }, // overlaps #0, higher priority
+      { x: 200, y: 200, w: 40, h: 12, priority: 1 }, // far away
+    ]);
+    expect(vis).toEqual([false, true, true]);
+  });
+
+  it("keeps input order on ties and drops later overlappers", () => {
+    const vis = declutterLabels([
+      { x: 0, y: 0, w: 30, h: 10, priority: 2 },
+      { x: 5, y: 0, w: 30, h: 10, priority: 2 }, // overlaps #0, same priority -> #0 kept
+      { x: 100, y: 0, w: 30, h: 10, priority: 2 },
+    ]);
+    expect(vis).toEqual([true, false, true]);
+  });
+
+  it("empty input yields empty output", () => {
+    expect(declutterLabels([])).toEqual([]);
   });
 });

@@ -15,6 +15,7 @@
  */
 
 export * from "./clock.js";
+export * from "./declutter.js";
 export * from "./intervals.js";
 export * from "./marks.js";
 export * from "./track.js";

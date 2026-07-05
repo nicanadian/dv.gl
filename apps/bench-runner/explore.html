@@ -8,6 +8,9 @@
       #scene { width: 100vw; height: 100vh; display: block; touch-action: none; }
       #status { position: fixed; top: 8px; left: 8px; color: #9f9; font: 13px monospace; z-index: 9; }
       #clock { position: fixed; top: 8px; right: 12px; color: #8df; font: 13px monospace; z-index: 9; }
+      #labelLayer { position: fixed; inset: 0; z-index: 8; pointer-events: none; }
+      .objLabel { position: absolute; font: 11px monospace; color: #dfe8ff;
+                  text-shadow: 0 0 3px #000, 0 0 3px #000; white-space: nowrap; }
       #pick { position: fixed; top: 8px; left: 50%; transform: translateX(-50%); z-index: 9;
               color: #eef; font: 13px monospace; padding: 3px 10px; border-radius: 4px;
               background: rgba(20,26,48,0.9); display: none; pointer-events: none; }
@@ -44,6 +47,7 @@
     <div id="pick"></div>
     <div id="timeMarks"></div>
     <div id="objects"><div id="objectsHead">&#9662; mission objects</div><div id="objectsBody"></div></div>
+    <div id="labelLayer"></div>
     <canvas id="scene"></canvas>
     <div id="bar">
       <button id="play">pause</button>
@@ -63,6 +67,7 @@
       <label><input id="stations" type="checkbox" /> stations</label>
       <label><input id="footprints" type="checkbox" /> footprints</label>
       <label><input id="coverage" type="checkbox" /> coverage</label>
+      <label><input id="labels" type="checkbox" /> labels</label>
       <label><input id="heading" type="checkbox" /> heading</label>
       <label for="time">timeline (7 days) &#8594;</label>
       <input id="time" type="range" min="0" max="10079" value="0" step="1" />

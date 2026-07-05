@@ -19,7 +19,7 @@
  * wheel zoom, a scrubbable 7-day timeline, and play/pause. NOT a benchmark page --
  * no metrics, input is yours. This is the seed of the actual product demo.
  */
-import { MissionClock, TimelineMarks } from "@dvgl/core";
+import { declutterLabels, type LabelBox, MissionClock, TimelineMarks } from "@dvgl/core";
 import { ecefToGeodetic, ecefToSurface, geodeticToEcef, gmst } from "@dvgl/frames";
 import {
   decodePickedIndex,
@@ -334,6 +334,24 @@ async function main(): Promise<void> {
     });
     const covPos = new Float32Array(90 * 180 * 3);
     const covCol = new Float32Array(90 * 180 * 4);
+
+    // V8 labels: declutter-aware DOM name tags. dv.gl decides which fit
+    // (declutterLabels); the app owns the text/style. Gated to fleet-scale sets.
+    const labelsBox = document.getElementById("labels") as HTMLInputElement;
+    const labelsLayer = document.getElementById("labelLayer") as HTMLElement;
+    const labelsCanAfford = source.names !== undefined && source.count <= 200;
+    if (!labelsCanAfford) labelsBox.disabled = true;
+    const labelEls: HTMLSpanElement[] = [];
+    if (labelsCanAfford) {
+      for (let k = 0; k < source.count; k += 1) {
+        const el = document.createElement("span");
+        el.className = "objLabel";
+        el.textContent = source.names?.[k] ?? `#${k}`;
+        el.style.display = "none";
+        labelsLayer.appendChild(el);
+        labelEls.push(el);
+      }
+    }
     source.onResult = (positions, minutes, failed) => {
       latestPositions = positions;
       if (renderer === undefined) {
@@ -756,6 +774,65 @@ async function main(): Promise<void> {
         covPts.updatePositions(covPos, ci);
         covPts.setColors(covCol.subarray(0, ci * 4));
         covPts.updateCamera(viewProjRte, eye, canvas.width, canvas.height);
+      }
+
+      // V8: project objects to screen, declutter, place DOM labels
+      if (labelsBox.checked && labelsCanAfford && latestPositions) {
+        const cssW = canvas.clientWidth;
+        const cssH = canvas.clientHeight;
+        const R2 = 6371 * 6371;
+        const cand: { k: number; sx: number; sy: number; box: LabelBox }[] = [];
+        for (let k = 0; k < source.count; k += 1) {
+          if (colors && (colors[k * 4 + 3] ?? 1) === 0) continue;
+          const px = latestPositions[k * 3] ?? Number.NaN;
+          const py = latestPositions[k * 3 + 1] ?? Number.NaN;
+          const pz = latestPositions[k * 3 + 2] ?? Number.NaN;
+          if (!Number.isFinite(px)) continue;
+          // far-side cull: hide labels for objects behind the globe limb
+          if (px * eye[0] + py * eye[1] + pz * eye[2] < R2) continue;
+          const rx = px - eye[0];
+          const ry = py - eye[1];
+          const rz = pz - eye[2];
+          const cw = viewProjRte[3]! * rx + viewProjRte[7]! * ry + viewProjRte[11]! * rz + viewProjRte[15]!;
+          if (cw <= 0) continue;
+          const cx = viewProjRte[0]! * rx + viewProjRte[4]! * ry + viewProjRte[8]! * rz + viewProjRte[12]!;
+          const cy = viewProjRte[1]! * rx + viewProjRte[5]! * ry + viewProjRte[9]! * rz + viewProjRte[13]!;
+          const sx = ((cx / cw) * 0.5 + 0.5) * cssW;
+          const sy = (1 - ((cy / cw) * 0.5 + 0.5)) * cssH;
+          const name = source.names?.[k] ?? `#${k}`;
+          cand.push({
+            k,
+            sx,
+            sy,
+            box: {
+              x: sx + 6,
+              y: sy - 7,
+              w: name.length * 6.3 + 6,
+              h: 14,
+              priority: k === hoveredIndex ? 1000 : 1,
+            },
+          });
+        }
+        const vis = declutterLabels(cand.map((c) => c.box));
+        const shownK = new Set<number>();
+        cand.forEach((c, i) => {
+          const el = labelEls[c.k];
+          if (!el) return;
+          if (vis[i]) {
+            el.style.display = "block";
+            el.style.left = `${c.sx + 6}px`;
+            el.style.top = `${c.sy - 7}px`;
+            shownK.add(c.k);
+          }
+        });
+        for (let k = 0; k < labelEls.length; k += 1) {
+          if (!shownK.has(k)) {
+            const el = labelEls[k];
+            if (el) el.style.display = "none";
+          }
+        }
+      } else if (labelEls.length && !labelsBox.checked) {
+        for (const el of labelEls) el.style.display = "none";
       }
 
       const encoder = device.createCommandEncoder();
