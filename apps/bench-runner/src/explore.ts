@@ -20,6 +20,7 @@
  * no metrics, input is yours. This is the seed of the actual product demo.
  */
 import { MissionClock } from "@dvgl/core";
+import { gmst } from "@dvgl/frames";
 import { PointRenderer } from "@dvgl/webgpu";
 import { catalogEpochMs, parseCatalog } from "@dvgl/orbits";
 import { loadCatalogText, makeSource, readVariant } from "./sources.js";
@@ -197,6 +198,7 @@ async function main(): Promise<void> {
     speedSel.addEventListener("change", () => {
       clock.rate = Number(speedSel.value);
     });
+    const ecefBox = document.getElementById("ecef") as HTMLInputElement;
 
     let lastT = performance.now();
     const tick = (): void => {
@@ -214,7 +216,10 @@ async function main(): Promise<void> {
         dirty = false;
       }
 
-      const eye = eyeFrom(view);
+      // earth-fixed: co-rotate the camera with Earth so ECEF geometry (GEO belt,
+      // ground tracks) holds still while inertial orbits sweep past
+      const gmstDeg = ecefBox.checked ? (gmst(clock.currentUnixMs()) * 180) / Math.PI : 0;
+      const eye = eyeFrom({ ...view, lonDeg: view.lonDeg + gmstDeg });
       const proj = perspective((50 * Math.PI) / 180, canvas.width / canvas.height, 10, 500_000);
       renderer?.updateCamera(mul(proj, lookAtRte(eye)), eye, canvas.width, canvas.height);
 

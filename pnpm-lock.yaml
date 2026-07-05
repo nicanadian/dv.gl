@@ -26,6 +26,9 @@ importers:
       '@dvgl/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@dvgl/frames':
+        specifier: workspace:*
+        version: link:../../packages/frames
       '@dvgl/orbits':
         specifier: workspace:*
         version: link:../../packages/orbits
@@ -83,6 +86,10 @@ importers:
       '@dvgl/core':
         specifier: workspace:*
         version: link:../core
+    devDependencies:
+      satellite.js:
+        specifier: ^5.0.0
+        version: 5.0.0
 
   packages/orbits:
     dependencies:

@@ -1,5 +1,8 @@
 # @dvgl/frames
 
-Time systems and coordinate frame transforms (TEME/ECI/ECEF, epochs, Earth-orientation handling).
+Time systems and coordinate frames for the visualization pipeline: GMST (IAU 1982,
+UT1~=UTC with the error budget documented in source), batch TEME->ECEF rotation
+(allocation-free, may run in place), and WGS84 geodetic conversion (Bowring).
+Polar motion and dUT1 corrections are v0.1+ work behind the same API.
 
-**Pre-alpha.** This package is a scaffolding stub; no functionality is implemented yet. See the [dv.gl root README](../../README.md) for project status and scope.
+**Pre-alpha.** See the [dv.gl root README](../../README.md).
