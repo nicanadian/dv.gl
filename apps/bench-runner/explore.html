@@ -8,11 +8,13 @@
       #scene { width: 100vw; height: 100vh; display: block; touch-action: none; }
       #status { position: fixed; top: 8px; left: 8px; color: #9f9; font: 13px monospace; z-index: 9; }
       #clock { position: fixed; top: 8px; right: 12px; color: #8df; font: 13px monospace; z-index: 9; }
-      #bar { position: fixed; bottom: 0; left: 0; right: 0; display: flex; gap: 10px;
-             align-items: center; padding: 10px 14px; background: rgba(10,10,20,0.85); z-index: 9; }
-      #time { flex: 1; }
-      button, select { background: #223; color: #cde; border: 1px solid #446; border-radius: 4px;
-                       font: 13px monospace; padding: 4px 10px; }
+      #bar { position: fixed; bottom: 0; left: 0; right: 0; display: flex; gap: 12px;
+             align-items: center; padding: 14px 18px; background: rgba(16,20,38,0.95);
+             border-top: 1px solid #35406b; z-index: 9; }
+      #bar label { color: #8da2d8; font: 12px monospace; white-space: nowrap; }
+      #time { flex: 1; height: 22px; accent-color: #6ab7ff; cursor: pointer; }
+      button, select { background: #26335c; color: #dbe6ff; border: 1px solid #4a5a94;
+                       border-radius: 5px; font: 14px monospace; padding: 6px 14px; cursor: pointer; }
     </style>
   </head>
   <body>
@@ -26,6 +28,7 @@
         <option value="600" selected>600x</option>
         <option value="6000">6000x</option>
       </select>
+      <label for="time">timeline (7 days) &#8594;</label>
       <input id="time" type="range" min="0" max="10079" value="0" step="1" />
     </div>
     <script type="module" src="./src/explore.ts"></script>
