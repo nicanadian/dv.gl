@@ -19,6 +19,7 @@ export function isWebGpuAvailable(nav: unknown = globalThis.navigator): boolean 
   return typeof nav === "object" && nav !== null && "gpu" in nav;
 }
 
+export * from "./earth.js";
 export * from "./points.js";
 export * from "./rte.js";
 export * from "./trails.js";

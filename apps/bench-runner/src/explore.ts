@@ -21,7 +21,7 @@
  */
 import { MissionClock } from "@dvgl/core";
 import { gmst } from "@dvgl/frames";
-import { PointRenderer, TrailRenderer } from "@dvgl/webgpu";
+import { EarthRenderer, PointRenderer, TrailRenderer } from "@dvgl/webgpu";
 import { catalogEpochMs, parseCatalog } from "@dvgl/orbits";
 import { loadCatalogText, makeSource, readVariant } from "./sources.js";
 
@@ -116,6 +116,13 @@ async function main(): Promise<void> {
     if (!context) throw new Error("no webgpu canvas context");
     const format = navigator.gpu.getPreferredCanvasFormat();
     context.configure({ device, format, alphaMode: "opaque" });
+    const depthFormat: GPUTextureFormat = "depth24plus";
+    const depthTexture = device.createTexture({
+      size: [canvas.width, canvas.height],
+      format: depthFormat,
+      usage: GPUTextureUsage.RENDER_ATTACHMENT,
+    });
+    const earth = new EarthRenderer(device, { format, depthFormat });
 
     say("loading catalog...");
     const { mode, multiplier } = readVariant();
@@ -145,10 +152,10 @@ async function main(): Promise<void> {
     // loop never blocks on evaluation, which is why scrubbing stays smooth
     const clockEl = document.getElementById("clock");
     source.onResult = (positions, minutes, failed) => {
-      renderer ??= new PointRenderer(device, { capacity: source.count, format });
+      renderer ??= new PointRenderer(device, { capacity: source.count, format, depthFormat });
       renderer.updatePositions(positions, source.count);
       if (trailsBox.checked) {
-        trails ??= new TrailRenderer(device, { capacity: source.count, format });
+        trails ??= new TrailRenderer(device, { capacity: source.count, format, depthFormat });
         trails.push(positions, source.count);
       }
       const d = Math.floor(minutes / 1440);
@@ -230,11 +237,14 @@ async function main(): Promise<void> {
       }
 
       // earth-fixed: co-rotate the camera with Earth so ECEF geometry (GEO belt,
-      // ground tracks) holds still while inertial orbits sweep past
-      const gmstDeg = ecefBox.checked ? (gmst(clock.currentUnixMs()) * 180) / Math.PI : 0;
+      // ground tracks) holds still while inertial orbits sweep past. The globe
+      // itself always spins at GMST, so it appears stationary in that mode.
+      const gmstRad = gmst(clock.currentUnixMs());
+      const gmstDeg = ecefBox.checked ? (gmstRad * 180) / Math.PI : 0;
       const eye = eyeFrom({ ...view, lonDeg: view.lonDeg + gmstDeg });
       const proj = perspective((50 * Math.PI) / 180, canvas.width / canvas.height, 10, 500_000);
       const viewProjRte = mul(proj, lookAtRte(eye));
+      earth.updateCamera(viewProjRte, eye, gmstRad);
       renderer?.updateCamera(viewProjRte, eye, canvas.width, canvas.height);
       if (trailsBox.checked) trails?.updateCamera(viewProjRte, eye);
 
@@ -248,7 +258,14 @@ async function main(): Promise<void> {
             storeOp: "store",
           },
         ],
+        depthStencilAttachment: {
+          view: depthTexture.createView(),
+          depthClearValue: 1,
+          depthLoadOp: "clear",
+          depthStoreOp: "store",
+        },
       });
+      earth.draw(pass); // writes depth: satellites occlude behind the planet
       if (trailsBox.checked) trails?.draw(pass); // under the points
       renderer?.draw(pass);
       pass.end();

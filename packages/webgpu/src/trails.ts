@@ -85,6 +85,8 @@ export interface TrailRendererOptions {
   readonly format: GPUTextureFormat;
   /** Ring length: how many epoch snapshots a trail spans. Default 48. */
   readonly slots?: number;
+  /** When the pass has a depth attachment: test against it, never write. */
+  readonly depthFormat?: GPUTextureFormat;
 }
 
 export class TrailRenderer {
@@ -129,6 +131,15 @@ export class TrailRenderer {
         ],
       },
       primitive: { topology: "line-strip" },
+      ...(opts.depthFormat
+        ? {
+            depthStencil: {
+              format: opts.depthFormat,
+              depthWriteEnabled: false,
+              depthCompare: "less-equal" as const,
+            },
+          }
+        : {}),
     });
 
     const bytes = this.slots * opts.capacity * 4 * 4;

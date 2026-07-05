@@ -79,6 +79,8 @@ export interface PointRendererOptions {
   readonly capacity: number;
   readonly format: GPUTextureFormat;
   readonly pointSizePx?: number;
+  /** When the pass has a depth attachment: test against it, never write. */
+  readonly depthFormat?: GPUTextureFormat;
 }
 
 /**
@@ -128,6 +130,15 @@ export class PointRenderer {
         ],
       },
       primitive: { topology: "triangle-list" },
+      ...(opts.depthFormat
+        ? {
+            depthStencil: {
+              format: opts.depthFormat,
+              depthWriteEnabled: false,
+              depthCompare: "less-equal" as const,
+            },
+          }
+        : {}),
     });
 
     const bytes = opts.capacity * 4 * 4;

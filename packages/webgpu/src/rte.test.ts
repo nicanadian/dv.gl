@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 import { describe, expect, it } from "vitest";
+import { buildEllipsoid, EARTH_A_KM, EARTH_B_KM } from "./earth.js";
 import { POINTS_WGSL } from "./points.js";
 import { combineSplit, packRte, packSplit3To4, splitCamera, splitDouble } from "./rte.js";
 import { nextTrailSlot, TRAILS_WGSL, trailSlotForAge } from "./trails.js";
@@ -130,5 +131,44 @@ describe("trail ring math", () => {
   it("WGSL consumes the same ring layout", () => {
     expect(TRAILS_WGSL).toContain("slot * count + i");
     expect(TRAILS_WGSL).toContain("(newest + slots - (clampedAge % slots)) % slots");
+  });
+});
+
+describe("ellipsoid mesh", () => {
+  it("vertices lie on the WGS84 ellipsoid with outward normals", () => {
+    const mesh = buildEllipsoid(8, 16, 45);
+    expect(mesh.vertices.length % 6).toBe(0);
+    for (let k = 0; k < mesh.vertices.length; k += 6 * 7) {
+      const x = mesh.vertices[k] ?? 0;
+      const y = mesh.vertices[k + 1] ?? 0;
+      const z = mesh.vertices[k + 2] ?? 0;
+      const f = (x / EARTH_A_KM) ** 2 + (y / EARTH_A_KM) ** 2 + (z / EARTH_B_KM) ** 2;
+      expect(f).toBeCloseTo(1, 4); // on the surface
+      const nx = mesh.vertices[k + 3] ?? 0;
+      const ny = mesh.vertices[k + 4] ?? 0;
+      const nz = mesh.vertices[k + 5] ?? 0;
+      expect(Math.hypot(nx, ny, nz)).toBeCloseTo(1, 5); // unit normal
+      expect(nx * x + ny * y + nz * z).toBeGreaterThan(0); // outward
+    }
+  });
+
+  it("index buffer is complete and in range", () => {
+    const lat = 8;
+    const lon = 16;
+    const mesh = buildEllipsoid(lat, lon, 45);
+    expect(mesh.indices.length).toBe(lat * lon * 6);
+    const vcount = mesh.vertices.length / 6;
+    for (const i of mesh.indices) expect(i).toBeLessThan(vcount);
+  });
+
+  it("graticule sits just above the surface as a line list", () => {
+    const mesh = buildEllipsoid(8, 16, 45);
+    expect((mesh.graticuleVertices.length / 3) % 2).toBe(0); // pairs
+    const x = mesh.graticuleVertices[0] ?? 0;
+    const y = mesh.graticuleVertices[1] ?? 0;
+    const z = mesh.graticuleVertices[2] ?? 0;
+    const f = (x / EARTH_A_KM) ** 2 + (y / EARTH_A_KM) ** 2 + (z / EARTH_B_KM) ** 2;
+    expect(f).toBeGreaterThan(1.001); // bumped off the surface
+    expect(f).toBeLessThan(1.01);
   });
 });
