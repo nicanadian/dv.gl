@@ -16,7 +16,13 @@
 import * as satellite from "satellite.js";
 import { describe, expect, it } from "vitest";
 import { gmst, unixMsToJulianDate } from "./gmst.js";
-import { ecefToGeodetic, temeToEcef, WGS84_A_KM } from "./transforms.js";
+import {
+  ecefToGeodetic,
+  ecefToSurface,
+  geodeticToEcef,
+  temeToEcef,
+  WGS84_A_KM,
+} from "./transforms.js";
 
 describe("gmst", () => {
   it("reproduces Vallado example 3-5 (1992-08-20 12:14:00 UT1)", () => {
@@ -95,5 +101,43 @@ describe("ecefToGeodetic", () => {
     expect(ours.latDeg).toBeCloseTo((ref.latitude * 180) / Math.PI, 4);
     expect(ours.lonDeg).toBeCloseTo((ref.longitude * 180) / Math.PI, 4);
     expect(ours.heightKm).toBeCloseTo(ref.height, 2);
+  });
+});
+
+describe("geodetic round trip + ground projection", () => {
+  it("ecef -> geodetic -> ecef recovers the original position", () => {
+    const cases: [number, number, number][] = [
+      [4000, 3000, 4500],
+      [WGS84_A_KM + 500, 0, 0],
+      [0, 0, 6356.7523142 + 800],
+      [-2000, 5000, -3000],
+    ];
+    for (const [x, y, z] of cases) {
+      const g = ecefToGeodetic(x, y, z);
+      const back = geodeticToEcef(g.latDeg, g.lonDeg, g.heightKm);
+      expect(back[0]).toBeCloseTo(x, 3);
+      expect(back[1]).toBeCloseTo(y, 3);
+      expect(back[2]).toBeCloseTo(z, 3);
+    }
+  });
+
+  it("ecefToSurface drops to the ellipsoid at the same lon/lat", () => {
+    // a 700 km satellite over ~45N, 30E
+    const sat = geodeticToEcef(45, 30, 700);
+    const surf = ecefToSurface(sat[0], sat[1], sat[2], 0);
+    const g = ecefToGeodetic(surf[0], surf[1], surf[2]);
+    expect(g.latDeg).toBeCloseTo(45, 4);
+    expect(g.lonDeg).toBeCloseTo(30, 4);
+    expect(g.heightKm).toBeCloseTo(0, 3); // on the surface
+    // radius at the surface point is well below the satellite radius
+    expect(Math.hypot(surf[0], surf[1], surf[2])).toBeLessThan(Math.hypot(sat[0], sat[1], sat[2]));
+  });
+
+  it("bump lifts the ground point by the requested height; NaN passes through", () => {
+    const sat = geodeticToEcef(0, 0, 550);
+    const s0 = ecefToSurface(sat[0], sat[1], sat[2], 0);
+    const s5 = ecefToSurface(sat[0], sat[1], sat[2], 5);
+    expect(Math.hypot(...s5) - Math.hypot(...s0)).toBeCloseTo(5, 3);
+    expect(ecefToSurface(Number.NaN, 1, 2).every(Number.isNaN)).toBe(true);
   });
 });

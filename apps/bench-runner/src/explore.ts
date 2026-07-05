@@ -20,7 +20,7 @@
  * no metrics, input is yours. This is the seed of the actual product demo.
  */
 import { MissionClock } from "@dvgl/core";
-import { gmst } from "@dvgl/frames";
+import { ecefToSurface, gmst } from "@dvgl/frames";
 import { EarthRenderer, OrbitTrackRenderer, PointRenderer } from "@dvgl/webgpu";
 import { catalogEpochMs, parseCatalog } from "@dvgl/orbits";
 import { loadCatalogText, makeSource, readVariant } from "./sources.js";
@@ -307,20 +307,26 @@ async function main(): Promise<void> {
       clock.rate = Number(speedSel.value);
     });
     const ecefBox = document.getElementById("ecef") as HTMLInputElement;
-    const tracksBox = document.getElementById("tracks") as HTMLInputElement;
+    const trackModeSel = document.getElementById("trackmode") as HTMLSelectElement;
+    const trackMode = (): "none" | "orbit" | "ground" =>
+      trackModeSel.value as "none" | "orbit" | "ground";
+    // ground tracks are inherently earth-fixed; orbit tracks follow the camera frame
+    const trackEcef = (): boolean => trackMode() === "ground" || ecefBox.checked;
     if (!tracksAffordable) {
-      tracksBox.disabled = true;
-      (tracksBox.parentElement as HTMLElement).title =
-        "orbit tracks need a window-capable source and <=512 objects";
+      trackModeSel.disabled = true;
+      (trackModeSel.parentElement as HTMLElement).title =
+        "tracks need a window-capable source and <=512 objects";
     }
-    tracksBox.addEventListener("change", () => {
-      if (!tracksBox.checked) tracks?.clear();
+    const invalidateWindow = (): void => {
       lastWindowCenterMin = Number.NEGATIVE_INFINITY;
+    };
+    trackModeSel.addEventListener("change", () => {
+      if (trackMode() === "none") tracks?.clear();
+      invalidateWindow();
     });
-    // switching frames changes what the track DATA means: recompute
-    ecefBox.addEventListener("change", () => {
-      lastWindowCenterMin = Number.NEGATIVE_INFINITY;
-    });
+    ecefBox.addEventListener("change", invalidateWindow);
+    // ground mode replaces each window sample with its sub-satellite surface point
+    const surfaceScratch = new Float32Array(source.count * TRACK_SAMPLES * 3);
     source.onWindow = (windowKm, centerMinutes, samples, periodsMinutes) => {
       if (tracks === undefined) {
         tracks = new OrbitTrackRenderer(device, {
@@ -331,7 +337,23 @@ async function main(): Promise<void> {
         });
         if (colors) tracks.setColors(colors);
       }
-      tracks.setWindow(windowKm, source.count, periodsMinutes);
+      let buf = windowKm;
+      if (trackMode() === "ground") {
+        const n = source.count * samples * 3;
+        for (let k = 0; k < n; k += 3) {
+          const s = ecefToSurface(
+            windowKm[k] ?? Number.NaN,
+            windowKm[k + 1] ?? Number.NaN,
+            windowKm[k + 2] ?? Number.NaN,
+            8, // km lift above the ellipsoid
+          );
+          surfaceScratch[k] = s[0];
+          surfaceScratch[k + 1] = s[1];
+          surfaceScratch[k + 2] = s[2];
+        }
+        buf = surfaceScratch;
+      }
+      tracks.setWindow(buf, source.count, periodsMinutes);
       lastWindowCenterMin = centerMinutes; // the split offset is measured from HERE
     };
 
@@ -352,16 +374,12 @@ async function main(): Promise<void> {
       }
       // sliding +/-1-orbit window: recompute when scene time drifts ~1/8 of a
       // LEO period from the last window center (or after a scrub reset)
-      if (tracksBox.checked && tracksAffordable) {
+      if (trackMode() !== "none" && tracksAffordable) {
         const centerMin = clock.currentSeconds / 60;
         if (Math.abs(centerMin - lastWindowCenterMin) > 12) {
           lastWindowCenterMin = centerMin;
-          // earth-fixed: window computed in ECEF (per-sample GMST) -> the weave
-          source.requestWindow?.(
-            centerMin,
-            TRACK_SAMPLES,
-            ecefBox.checked ? clock.epochMs : undefined,
-          );
+          // ECEF window (per-sample GMST) gives the weave / the ground track
+          source.requestWindow?.(centerMin, TRACK_SAMPLES, trackEcef() ? clock.epochMs : undefined);
         }
       }
 
@@ -375,11 +393,11 @@ async function main(): Promise<void> {
       const viewProjRte = mul(proj, lookAtRte(eye));
       earth.updateCamera(viewProjRte, eye, gmstRad);
       renderer?.updateCamera(viewProjRte, eye, canvas.width, canvas.height);
-      if (tracksBox.checked)
+      if (trackMode() !== "none")
         tracks?.updateCamera(
           viewProjRte,
           eye,
-          ecefBox.checked ? gmstRad : 0,
+          trackEcef() ? gmstRad : 0, // ECEF data spins with the globe
           clock.currentSeconds / 60 - lastWindowCenterMin, // continuous now-split
         );
 
@@ -401,7 +419,7 @@ async function main(): Promise<void> {
         },
       });
       earth.draw(pass); // writes depth: satellites occlude behind the planet
-      if (tracksBox.checked) tracks?.draw(pass); // under the points
+      if (trackMode() !== "none") tracks?.draw(pass); // under the points
       renderer?.draw(pass);
       pass.end();
       device.queue.submit([encoder.finish()]);

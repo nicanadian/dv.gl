@@ -92,3 +92,37 @@ export function ecefToGeodetic(xKm: number, yKm: number, zKm: number): Geodetic 
     heightKm: height,
   };
 }
+
+/** WGSL84 geodetic (deg, km) back to ECEF cartesian (km). */
+export function geodeticToEcef(
+  latDeg: number,
+  lonDeg: number,
+  heightKm: number,
+): [number, number, number] {
+  const lat = (latDeg * Math.PI) / 180;
+  const lon = (lonDeg * Math.PI) / 180;
+  const sl = Math.sin(lat);
+  const cl = Math.cos(lat);
+  const n = WGS84_A_KM / Math.sqrt(1 - WGS84_E2 * sl * sl);
+  const r = (n + heightKm) * cl;
+  return [r * Math.cos(lon), r * Math.sin(lon), (n * (1 - WGS84_E2) + heightKm) * sl];
+}
+
+/**
+ * Sub-satellite ("ground") point of an ECEF position, returned on the WGS84
+ * surface at height `bumpKm` (a small lift so the track sits just above the
+ * ellipsoid and does not z-fight the globe). Non-finite input passes through as
+ * NaN. This is the projection the 3D ground-track view draws.
+ */
+export function ecefToSurface(
+  xKm: number,
+  yKm: number,
+  zKm: number,
+  bumpKm = 0,
+): [number, number, number] {
+  if (!Number.isFinite(xKm) || !Number.isFinite(yKm) || !Number.isFinite(zKm)) {
+    return [Number.NaN, Number.NaN, Number.NaN];
+  }
+  const g = ecefToGeodetic(xKm, yKm, zKm);
+  return geodeticToEcef(g.latDeg, g.lonDeg, bumpKm);
+}
