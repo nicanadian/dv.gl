@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>explore: dv.gl interactive</title>
+    <style>
+      html, body { margin: 0; width: 100%; height: 100%; background: #000; overflow: hidden; }
+      #scene { width: 100vw; height: 100vh; display: block; touch-action: none; }
+      #status { position: fixed; top: 8px; left: 8px; color: #9f9; font: 13px monospace; z-index: 9; }
+      #clock { position: fixed; top: 8px; right: 12px; color: #8df; font: 13px monospace; z-index: 9; }
+      #bar { position: fixed; bottom: 0; left: 0; right: 0; display: flex; gap: 10px;
+             align-items: center; padding: 10px 14px; background: rgba(10,10,20,0.85); z-index: 9; }
+      #time { flex: 1; }
+      button, select { background: #223; color: #cde; border: 1px solid #446; border-radius: 4px;
+                       font: 13px monospace; padding: 4px 10px; }
+    </style>
+  </head>
+  <body>
+    <div id="status">loading...</div>
+    <div id="clock"></div>
+    <canvas id="scene"></canvas>
+    <div id="bar">
+      <button id="play">pause</button>
+      <select id="speed">
+        <option value="60">60x</option>
+        <option value="600" selected>600x</option>
+        <option value="6000">6000x</option>
+      </select>
+      <input id="time" type="range" min="0" max="10079" value="0" step="1" />
+    </div>
+    <script type="module" src="./src/explore.ts"></script>
+  </body>
+</html>

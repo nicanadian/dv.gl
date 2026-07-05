@@ -12,6 +12,7 @@ export default defineConfig({
         index: "index.html",
         composed: "composed.html",
         cleansheet: "cleansheet.html",
+        explore: "explore.html",
       },
     },
     chunkSizeWarningLimit: 5000,
