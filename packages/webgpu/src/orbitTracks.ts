@@ -50,8 +50,9 @@ struct VsOut {
   @location(2) color : vec4<f32>,
 };
 
-// pass selector: 0 = draw only future fragments, 1 = draw only past fragments
-// (past drawn second so it wins where the revs overlap in space)
+// pass selector: 0 = draw only future fragments, 1 = draw only past fragments.
+// Past is drawn FIRST (muted, historical); the bright future is drawn on top so
+// it wins where the revs overlap -- for planning you read where it is GOING.
 struct PassSel { sel : vec4<f32> };
 @group(1) @binding(0) var<uniform> passSel : PassSel;
 
@@ -78,20 +79,25 @@ fn vs(@builtin(vertex_index) s : u32, @builtin(instance_index) i : u32) -> VsOut
   let mid = f32(samples - 1u) * 0.5;
   let nowIdx = mid * (1.0 + cam.params.w / max(periodsMin[i], 1e-6));
   out.future = select(0.0, 1.0, f32(s) > nowIdx);
-  // previous rev: 100% of the object's color. next rev: same hue at 60%.
   // colors[i].a is the per-object visibility (0 hides a filtered family).
-  out.alpha = select(1.0, 0.6, out.future > 0.5) * colors[i].a;
+  out.alpha = colors[i].a;
   out.color = colors[i];
   return out;
 }
 
 @fragment
 fn fs(in : VsOut) -> @location(0) vec4<f32> {
-  // two passes: future-only then past-only, so the full-opacity past orbit wins
-  // where the revs overlap in space
   if (passSel.sel.x < 0.5 && in.future < 0.5) { discard; }
   if (passSel.sel.x >= 0.5 && in.future >= 0.5) { discard; }
-  return vec4<f32>(in.color.rgb * in.alpha, in.alpha);
+  // Past vs future ride LUMINANCE (the CVD-safe channel), not opacity: the FUTURE
+  // rev is the full-bright family colour (the prediction you plan against); the
+  // PAST rev is the same hue desaturated toward grey and dropped to ~45%
+  // luminance, so it reads as a muted historical trail. Family hue is untouched.
+  let base = in.color.rgb;
+  let grey = vec3<f32>(dot(base, vec3<f32>(0.299, 0.587, 0.114)));
+  let past = mix(base, grey, 0.45) * 0.45;
+  let rgb = select(past, base, in.future > 0.5);
+  return vec4<f32>(rgb * in.alpha, in.alpha);
 }
 `;
 
@@ -264,12 +270,13 @@ export class OrbitTrackRenderer {
     pass.setBindGroup(0, this.bindGroup);
     // Near-circular orbits overlap themselves: past rev and next rev share the
     // same ring in space. The now-split is per-object and continuous, so the
-    // halves are selected in the FRAGMENT stage: future-only pass first, then
-    // past-only on top -- the solid past orbit always reads, amber shows where
-    // the next rev genuinely deviates.
-    pass.setBindGroup(1, this.passSelGroups[0]);
+    // halves are selected in the FRAGMENT stage. Draw the MUTED past first, then
+    // the bright future on top -- for planning, the future rev wins the overlap
+    // and the past is visible only where the orbit genuinely diverges (the whole
+    // ground-track weave in the earth-fixed frame).
+    pass.setBindGroup(1, this.passSelGroups[1]); // past (muted)
     pass.draw(this.samples, this.count);
-    pass.setBindGroup(1, this.passSelGroups[1]);
+    pass.setBindGroup(1, this.passSelGroups[0]); // future (bright), on top
     pass.draw(this.samples, this.count);
   }
 }
