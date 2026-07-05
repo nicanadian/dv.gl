@@ -16,6 +16,7 @@
 import { describe, expect, it } from "vitest";
 import { MissionClock } from "./clock.js";
 import { IntervalSet } from "./intervals.js";
+import { TimelineMarks } from "./marks.js";
 import { SampledTrack } from "./track.js";
 
 const DAY = 86_400;
@@ -184,5 +185,38 @@ describe("SampledTrack", () => {
     expect(() => new SampledTrack(new Float64Array([0, 0]), new Float32Array([1, 2]), 1)).toThrow(
       /strictly increasing/,
     );
+  });
+});
+
+describe("TimelineMarks", () => {
+  const marks = new TimelineMarks([
+    { timeSec: 300, category: "contact" },
+    { timeSec: 100, category: "collect" },
+    { timeSec: 200, category: "eclipse" },
+    { timeSec: Number.NaN, category: "bad" }, // dropped
+  ]);
+
+  it("sorts by time and drops non-finite marks", () => {
+    expect(marks.length).toBe(3);
+    expect(marks.marks.map((m) => m.timeSec)).toEqual([100, 200, 300]);
+  });
+
+  it("range query is inclusive and ordered", () => {
+    expect(marks.inRange(150, 300).map((m) => m.category)).toEqual(["eclipse", "contact"]);
+    expect(marks.inRange(0, 50)).toEqual([]);
+  });
+
+  it("nearest picks the closest mark either side", () => {
+    expect(marks.nearest(120)?.timeSec).toBe(100);
+    expect(marks.nearest(260)?.timeSec).toBe(300);
+    expect(new TimelineMarks([]).nearest(0)).toBeUndefined();
+  });
+
+  it("next/prev are strict and support jump-to-event", () => {
+    expect(marks.next(100)?.timeSec).toBe(200); // strictly after
+    expect(marks.next(250)?.timeSec).toBe(300);
+    expect(marks.next(300)).toBeUndefined(); // nothing after the last
+    expect(marks.prev(300)?.timeSec).toBe(200);
+    expect(marks.prev(100)).toBeUndefined();
   });
 });

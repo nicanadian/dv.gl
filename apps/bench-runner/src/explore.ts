@@ -19,7 +19,7 @@
  * wheel zoom, a scrubbable 7-day timeline, and play/pause. NOT a benchmark page --
  * no metrics, input is yours. This is the seed of the actual product demo.
  */
-import { MissionClock } from "@dvgl/core";
+import { MissionClock, TimelineMarks } from "@dvgl/core";
 import { ecefToSurface, gmst } from "@dvgl/frames";
 import {
   decodePickedIndex,
@@ -417,6 +417,54 @@ async function main(): Promise<void> {
     speedSel.addEventListener("change", () => {
       clock.rate = Number(speedSel.value);
     });
+
+    // V6 event marks: a @dvgl/core TimelineMarks the app fills with meaning. Here
+    // we seed deterministic synthetic events; dv.gl provides the time-indexing,
+    // the ticks, and jump-to-event ('.'/',').
+    const CATS: Record<string, string> = {
+      collect: "#6ab7ff",
+      contact: "#7fe0a0",
+      eclipse: "#c9a0ff",
+      maneuver: "#ff9e6b",
+    };
+    const catList = Object.keys(CATS);
+    const events = Array.from({ length: 14 }, (_, i) => ({
+      timeSec: ((i * 7 + 3) % 20) * (windowSeconds / 20) + windowSeconds / 40,
+      category: catList[i % catList.length] ?? "collect",
+    }));
+    const marks = new TimelineMarks(events);
+    const marksEl = document.getElementById("timeMarks") as HTMLElement;
+    const layoutMarks = (): void => {
+      const r = slider.getBoundingClientRect();
+      marksEl.style.left = `${r.left}px`;
+      marksEl.style.width = `${r.width}px`;
+      marksEl.style.bottom = `${window.innerHeight - r.top + 3}px`;
+      marksEl.innerHTML = "";
+      for (const m of marks.marks) {
+        const tick = document.createElement("span");
+        tick.className = "tick";
+        tick.style.left = `${(m.timeSec / windowSeconds) * 100}%`;
+        tick.style.background = CATS[m.category] ?? "#8ab";
+        tick.title = m.category;
+        marksEl.appendChild(tick);
+      }
+    };
+    layoutMarks();
+    window.addEventListener("resize", layoutMarks);
+    // jump to next/prev event
+    window.addEventListener("keydown", (e) => {
+      const t = clock.currentSeconds;
+      const target = e.key === "." ? marks.next(t) : e.key === "," ? marks.prev(t) : undefined;
+      if (target) {
+        clock.scrubTo(target.timeSec);
+        clock.pause();
+        playBtn.textContent = "play";
+        slider.value = String(Math.floor(target.timeSec / 60));
+        invalidateWindow();
+        dirty = true;
+      }
+    });
+
     const ecefBox = document.getElementById("ecef") as HTMLInputElement;
     const trackModeSel = document.getElementById("trackmode") as HTMLSelectElement;
     const trackMode = (): "none" | "orbit" | "ground" =>

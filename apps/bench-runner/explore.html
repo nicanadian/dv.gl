@@ -15,6 +15,8 @@
              align-items: center; padding: 14px 18px; background: rgba(16,20,38,0.95);
              border-top: 1px solid #35406b; z-index: 9; }
       #bar label { color: #8da2d8; font: 12px monospace; white-space: nowrap; }
+      #timeMarks { position: fixed; height: 7px; z-index: 10; pointer-events: none; }
+      #timeMarks .tick { position: absolute; width: 2px; height: 7px; transform: translateX(-1px); border-radius: 1px; }
       #time { flex: 1; height: 22px; accent-color: #6ab7ff; cursor: pointer; }
       button, select { background: #26335c; color: #dbe6ff; border: 1px solid #4a5a94;
                        border-radius: 5px; font: 14px monospace; padding: 6px 14px; cursor: pointer; }
@@ -40,6 +42,7 @@
     <div id="status">loading...</div>
     <div id="clock"></div>
     <div id="pick"></div>
+    <div id="timeMarks"></div>
     <div id="objects"><div id="objectsHead">&#9662; mission objects</div><div id="objectsBody"></div></div>
     <canvas id="scene"></canvas>
     <div id="bar">
