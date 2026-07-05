@@ -172,6 +172,7 @@ async function main(): Promise<void> {
     let pickPending = false;
     let pickMapping = false;
     let hoveredIndex = -1;
+    const selected = new Set<number>(); // pinned satellites -> show their access envelope
     const pickEl = document.getElementById("pick") as HTMLElement;
 
     say("loading catalog...");
@@ -357,6 +358,101 @@ async function main(): Promise<void> {
     });
     const fpSeg = new Float32Array(source.count * FP_OUTLINE_SEG * 2 * 3);
     const fpCol = new Float32Array(source.count * FP_OUTLINE_SEG * 2 * 4);
+
+    // Access layer: the field-of-regard ENVELOPE -- everywhere a sensor COULD
+    // steer to (not where it is pointed, and NOT "coverage"). Same swath primitive
+    // widened to the full steering limits, shown only for selected satellites so it
+    // never becomes wallpaper. Fainter fill than the footprint; access "could see"
+    // must never be mistaken for coverage "did see".
+    const ACCESS: Record<string, SwathOptions> = {
+      SAR: { side: "right", innerOffNadirDeg: 15, outerOffNadirDeg: 50, alongHalfDeg: 5, segments: SWATH_SEG },
+      EO: { side: "both", innerOffNadirDeg: 0, outerOffNadirDeg: 45, alongHalfDeg: 5, segments: SWATH_SEG },
+    };
+    const ACCESS_EO: SwathOptions = ACCESS.EO ?? SWATH_EO;
+    const accessFor = (fam: string | undefined): SwathOptions => ACCESS[fam ?? ""] ?? ACCESS_EO;
+    const accessBox = document.getElementById("access") as HTMLInputElement;
+    const accessFill = new TriRenderer(device, {
+      capacity: source.count * (SWATH_SEG - 1) * 2 * 3,
+      format,
+      depthFormat,
+    });
+    const accessTriPos = new Float32Array(source.count * (SWATH_SEG - 1) * 2 * 3 * 3);
+    const accessTriCol = new Float32Array(source.count * (SWATH_SEG - 1) * 2 * 3 * 4);
+    const accessLineR = new LineRenderer(device, {
+      capacity: source.count * FP_OUTLINE_SEG * 2,
+      format,
+      depthFormat,
+    });
+    const acSeg = new Float32Array(source.count * FP_OUTLINE_SEG * 2 * 3);
+    const acCol = new Float32Array(source.count * FP_OUTLINE_SEG * 2 * 4);
+
+    // Build filled ground swaths (+ edge outlines) for the objects `include`
+    // accepts, into caller buffers. Shared by the footprint layer (all visible,
+    // nominal angles) and the access layer (selected only, wide FOR angles).
+    const buildSwaths = (
+      include: (k: number) => boolean,
+      optFor: (fam: string | undefined) => SwathOptions,
+      triPos: Float32Array,
+      triCol: Float32Array,
+      segPos: Float32Array,
+      segCol: Float32Array,
+      fillAlpha: number,
+      lineAlpha: number,
+    ): { tris: number; segs: number } => {
+      if (!latestPositions) return { tris: 0, segs: 0 };
+      const pos = latestPositions;
+      let ft = 0;
+      let fs = 0;
+      const tri = (e: Float32Array, j: number, r: number, g: number, b: number): void => {
+        triPos[ft * 3] = e[j * 3] ?? 0;
+        triPos[ft * 3 + 1] = e[j * 3 + 1] ?? 0;
+        triPos[ft * 3 + 2] = e[j * 3 + 2] ?? 0;
+        triCol.set([r, g, b, fillAlpha], ft * 4);
+        ft += 1;
+      };
+      const out = (a: Float32Array, ai: number, b: Float32Array, bi: number, r: number, g: number, bl: number): void => {
+        const p = fs * 6;
+        segPos[p] = a[ai * 3] ?? 0;
+        segPos[p + 1] = a[ai * 3 + 1] ?? 0;
+        segPos[p + 2] = a[ai * 3 + 2] ?? 0;
+        segPos[p + 3] = b[bi * 3] ?? 0;
+        segPos[p + 4] = b[bi * 3 + 1] ?? 0;
+        segPos[p + 5] = b[bi * 3 + 2] ?? 0;
+        segCol.set([r, g, bl, lineAlpha, r, g, bl, lineAlpha], fs * 8);
+        fs += 1;
+      };
+      for (let k = 0; k < source.count; k += 1) {
+        if (!include(k)) continue;
+        const x = pos[k * 3] ?? Number.NaN;
+        if (!Number.isFinite(x)) continue;
+        const vx = dirVec[k * 3] ?? 0;
+        const vy = dirVec[k * 3 + 1] ?? 0;
+        const vz = dirVec[k * 3 + 2] ?? 0;
+        if (vx === 0 && vy === 0 && vz === 0) continue; // heading not established yet
+        const { near, far } = sensorSwathEdges(
+          [x, pos[k * 3 + 1] ?? 0, pos[k * 3 + 2] ?? 0],
+          [vx, vy, vz],
+          optFor(families?.[k]),
+        );
+        const seg = near.length / 3;
+        const cr = colors?.[k * 4] ?? 0.6;
+        const cg = colors?.[k * 4 + 1] ?? 0.85;
+        const cb = colors?.[k * 4 + 2] ?? 1.0;
+        for (let j = 0; j < seg - 1; j += 1) {
+          tri(near, j, cr, cg, cb);
+          tri(far, j, cr, cg, cb);
+          tri(near, j + 1, cr, cg, cb);
+          tri(far, j, cr, cg, cb);
+          tri(far, j + 1, cr, cg, cb);
+          tri(near, j + 1, cr, cg, cb);
+          out(near, j, near, j + 1, cr, cg, cb);
+          out(far, j, far, j + 1, cr, cg, cb);
+        }
+        out(near, 0, far, 0, cr, cg, cb);
+        out(near, seg - 1, far, seg - 1, cr, cg, cb);
+      }
+      return { tris: ft / 3, segs: fs };
+    };
 
     // V7 coverage accumulation: an equirect grid the footprints stamp as time
     // advances, rendered as a heat point-cloud on the surface.
@@ -661,10 +757,14 @@ async function main(): Promise<void> {
     let dragging = false;
     let lastX = 0;
     let lastY = 0;
+    let downX = 0;
+    let downY = 0;
     canvas.addEventListener("pointerdown", (e) => {
       dragging = true;
       lastX = e.clientX;
       lastY = e.clientY;
+      downX = e.clientX;
+      downY = e.clientY;
       canvas.setPointerCapture(e.pointerId);
     });
     canvas.addEventListener("pointermove", (e) => {
@@ -699,8 +799,13 @@ async function main(): Promise<void> {
         pickEl.style.display = "none";
       }
     };
-    canvas.addEventListener("pointerup", () => {
+    canvas.addEventListener("pointerup", (e) => {
       dragging = false;
+      // a click (not a drag) on a satellite pins/unpins it for the access layer
+      if (Math.hypot(e.clientX - downX, e.clientY - downY) < 5 && hoveredIndex >= 0) {
+        if (selected.has(hoveredIndex)) selected.delete(hoveredIndex);
+        else selected.add(hoveredIndex);
+      }
     });
     canvas.addEventListener(
       "wheel",
@@ -984,64 +1089,29 @@ async function main(): Promise<void> {
         headingLines.updateCamera(viewProjRte, eye);
       }
 
+      // Access ENVELOPE (field of regard) for pinned/hovered satellites -- wide,
+      // faint fill. Drawn under the footprint so "could see" sits beneath "pointed".
+      if (accessBox.checked && (selected.size > 0 || hoveredIndex >= 0)) {
+        const inc = (k: number): boolean =>
+          (selected.has(k) || k === hoveredIndex) && !(colors && (colors[k * 4 + 3] ?? 1) === 0);
+        const r = buildSwaths(inc, accessFor, accessTriPos, accessTriCol, acSeg, acCol, 0.12, 0.55);
+        accessFill.setTriangles(accessTriPos, accessTriCol, r.tris);
+        accessFill.updateCamera(viewProjRte, eye);
+        accessLineR.setSegments(acSeg, acCol, r.segs);
+        accessLineR.updateCamera(viewProjRte, eye);
+      } else {
+        accessFill.clear();
+        accessLineR.clear();
+      }
+
       // V5: sensor footprint SWATHS -- a filled ground band following the velocity
       // frame, plus a crisp edge outline. SAR one-sided strip / EO straddle band.
-      if (footprintsBox.checked && latestPositions) {
-        let ft = 0; // fill triangle count
-        let fs = 0; // outline segment count
-        const triVert = (e: Float32Array, j: number): void => {
-          fpTriPos[ft * 3] = e[j * 3] ?? 0;
-          fpTriPos[ft * 3 + 1] = e[j * 3 + 1] ?? 0;
-          fpTriPos[ft * 3 + 2] = e[j * 3 + 2] ?? 0;
-          ft += 1;
-        };
-        const outline = (a: Float32Array, ai: number, b: Float32Array, bi: number): void => {
-          const p = fs * 6;
-          fpSeg[p] = a[ai * 3] ?? 0;
-          fpSeg[p + 1] = a[ai * 3 + 1] ?? 0;
-          fpSeg[p + 2] = a[ai * 3 + 2] ?? 0;
-          fpSeg[p + 3] = b[bi * 3] ?? 0;
-          fpSeg[p + 4] = b[bi * 3 + 1] ?? 0;
-          fpSeg[p + 5] = b[bi * 3 + 2] ?? 0;
-          fs += 1;
-        };
-        for (let k = 0; k < source.count; k += 1) {
-          if (colors && (colors[k * 4 + 3] ?? 1) === 0) continue;
-          const x = latestPositions[k * 3] ?? Number.NaN;
-          const y = latestPositions[k * 3 + 1] ?? Number.NaN;
-          const z = latestPositions[k * 3 + 2] ?? Number.NaN;
-          if (!Number.isFinite(x)) continue;
-          const vx = dirVec[k * 3] ?? 0;
-          const vy = dirVec[k * 3 + 1] ?? 0;
-          const vz = dirVec[k * 3 + 2] ?? 0;
-          if (vx === 0 && vy === 0 && vz === 0) continue; // heading not established yet
-          const { near, far } = sensorSwathEdges([x, y, z], [vx, vy, vz], swathFor(families?.[k]));
-          const seg = near.length / 3;
-          const cr = colors?.[k * 4] ?? 0.6;
-          const cgc = colors?.[k * 4 + 1] ?? 0.85;
-          const cb = colors?.[k * 4 + 2] ?? 1.0;
-          for (let j = 0; j < seg - 1; j += 1) {
-            const t0 = ft;
-            triVert(near, j);
-            triVert(far, j);
-            triVert(near, j + 1);
-            triVert(far, j);
-            triVert(far, j + 1);
-            triVert(near, j + 1);
-            for (let v = t0; v < ft; v += 1) fpTriCol.set([cr, cgc, cb, 0.18], v * 4);
-            const s0 = fs;
-            outline(near, j, near, j + 1); // near edge
-            outline(far, j, far, j + 1); // far edge
-            for (let s = s0; s < fs; s += 1) fpCol.set([cr, cgc, cb, 0.8, cr, cgc, cb, 0.8], s * 8);
-          }
-          const s0 = fs;
-          outline(near, 0, far, 0); // end caps
-          outline(near, seg - 1, far, seg - 1);
-          for (let s = s0; s < fs; s += 1) fpCol.set([cr, cgc, cb, 0.8, cr, cgc, cb, 0.8], s * 8);
-        }
-        footprintFill.setTriangles(fpTriPos, fpTriCol, ft / 3);
+      if (footprintsBox.checked) {
+        const inc = (k: number): boolean => !(colors && (colors[k * 4 + 3] ?? 1) === 0);
+        const r = buildSwaths(inc, swathFor, fpTriPos, fpTriCol, fpSeg, fpCol, 0.18, 0.8);
+        footprintFill.setTriangles(fpTriPos, fpTriCol, r.tris);
         footprintFill.updateCamera(viewProjRte, eye);
-        footprintLines.setSegments(fpSeg, fpCol, fs);
+        footprintLines.setSegments(fpSeg, fpCol, r.segs);
         footprintLines.updateCamera(viewProjRte, eye);
       } else {
         footprintFill.clear();
@@ -1154,6 +1224,10 @@ async function main(): Promise<void> {
       if (stationsBox.checked) {
         accessLines.draw(pass);
         stationPts.draw(pass);
+      }
+      if (accessBox.checked) {
+        accessFill.draw(pass); // FOR envelope, under the footprint
+        accessLineR.draw(pass);
       }
       if (footprintsBox.checked) {
         footprintFill.draw(pass); // filled ground area, under...
