@@ -28,7 +28,13 @@ import {
   OrbitTrackRenderer,
   PointRenderer,
 } from "@dvgl/webgpu";
-import { catalogEpochMs, elevationDeg, parseCatalog, stationEcef } from "@dvgl/orbits";
+import {
+  catalogEpochMs,
+  elevationDeg,
+  footprintRing,
+  parseCatalog,
+  stationEcef,
+} from "@dvgl/orbits";
 import { loadCatalogText, makeSource, readVariant } from "./sources.js";
 
 // ---- minimal mat4 (same as cleansheet) ----
@@ -286,6 +292,20 @@ async function main(): Promise<void> {
     const headSeg = new Float32Array(source.count * 2 * 3);
     const headCol = new Float32Array(source.count * 2 * 4);
     const LEADER_KM = 500;
+
+    // V5 sensor footprints: per-family nadir half-angle (app policy) -> ground ring
+    const FP_SEGMENTS = 48;
+    const halfAngleFor = (fam: string | undefined): number =>
+      fam === "SAR" ? 25 : fam === "EO" ? 12 : 18;
+    const perObjHalfAngle = families?.map(halfAngleFor);
+    const footprintsBox = document.getElementById("footprints") as HTMLInputElement;
+    const footprintLines = new LineRenderer(device, {
+      capacity: source.count * FP_SEGMENTS * 2,
+      format,
+      depthFormat,
+    });
+    const fpSeg = new Float32Array(source.count * FP_SEGMENTS * 2 * 3);
+    const fpCol = new Float32Array(source.count * FP_SEGMENTS * 2 * 4);
     source.onResult = (positions, minutes, failed) => {
       latestPositions = positions;
       if (renderer === undefined) {
@@ -589,6 +609,37 @@ async function main(): Promise<void> {
         headingLines.updateCamera(viewProjRte, eye);
       }
 
+      // V5: sensor footprint rings on the ground (frame-agnostic small circle)
+      if (footprintsBox.checked && latestPositions) {
+        let fs = 0;
+        for (let k = 0; k < source.count; k += 1) {
+          if (colors && (colors[k * 4 + 3] ?? 1) === 0) continue;
+          const x = latestPositions[k * 3] ?? Number.NaN;
+          const y = latestPositions[k * 3 + 1] ?? Number.NaN;
+          const z = latestPositions[k * 3 + 2] ?? Number.NaN;
+          if (!Number.isFinite(x)) continue;
+          const ring = footprintRing([x, y, z], perObjHalfAngle?.[k] ?? 18, FP_SEGMENTS, 6);
+          const cr = colors?.[k * 4] ?? 0.6;
+          const cgc = colors?.[k * 4 + 1] ?? 0.85;
+          const cb = colors?.[k * 4 + 2] ?? 1.0;
+          for (let i = 0; i < FP_SEGMENTS; i += 1) {
+            const a = i * 3;
+            const b = ((i + 1) % FP_SEGMENTS) * 3;
+            const p = fs * 6;
+            fpSeg[p] = ring[a] ?? 0;
+            fpSeg[p + 1] = ring[a + 1] ?? 0;
+            fpSeg[p + 2] = ring[a + 2] ?? 0;
+            fpSeg[p + 3] = ring[b] ?? 0;
+            fpSeg[p + 4] = ring[b + 1] ?? 0;
+            fpSeg[p + 5] = ring[b + 2] ?? 0;
+            fpCol.set([cr, cgc, cb, 0.4, cr, cgc, cb, 0.4], fs * 8);
+            fs += 1;
+          }
+        }
+        footprintLines.setSegments(fpSeg, fpCol, fs);
+        footprintLines.updateCamera(viewProjRte, eye);
+      }
+
       const encoder = device.createCommandEncoder();
       const pass = encoder.beginRenderPass({
         colorAttachments: [
@@ -612,6 +663,7 @@ async function main(): Promise<void> {
         accessLines.draw(pass);
         stationPts.draw(pass);
       }
+      if (footprintsBox.checked) footprintLines.draw(pass);
       if (headingBox.checked) headingLines.draw(pass);
       renderer?.draw(pass);
       pass.end();
