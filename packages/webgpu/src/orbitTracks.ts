@@ -41,11 +41,13 @@ struct Camera {
 @group(0) @binding(1) var<storage, read> posHigh : array<vec4<f32>>;
 @group(0) @binding(2) var<storage, read> posLow  : array<vec4<f32>>;
 @group(0) @binding(3) var<storage, read> periodsMin : array<f32>;
+@group(0) @binding(4) var<storage, read> colors : array<vec4<f32>>;
 
 struct VsOut {
   @builtin(position) clip : vec4<f32>,
   @location(0) alpha : f32,
   @location(1) future : f32,
+  @location(2) color : vec4<f32>,
 };
 
 // pass selector: 0 = draw only future fragments, 1 = draw only past fragments
@@ -75,21 +77,20 @@ fn vs(@builtin(vertex_index) s : u32, @builtin(instance_index) i : u32) -> VsOut
   // and the satellite always rides the color boundary.
   let mid = f32(samples - 1u) * 0.5;
   let nowIdx = mid * (1.0 + cam.params.w / max(periodsMin[i], 1e-6));
-  out.alpha = 0.9;
   out.future = select(0.0, 1.0, f32(s) > nowIdx);
+  // previous rev: 100% of the object's color. next rev: same hue at 60%.
+  out.alpha = select(1.0, 0.6, out.future > 0.5);
+  out.color = colors[i];
   return out;
 }
 
 @fragment
 fn fs(in : VsOut) -> @location(0) vec4<f32> {
-  // two passes: future-only then past-only, so the solid past orbit wins overlap
+  // two passes: future-only then past-only, so the full-opacity past orbit wins
+  // where the revs overlap in space
   if (passSel.sel.x < 0.5 && in.future < 0.5) { discard; }
   if (passSel.sel.x >= 0.5 && in.future >= 0.5) { discard; }
-  // past rev: catalog cyan. next rev: amber. both solid.
-  let past = vec3<f32>(0.55, 0.80, 1.00);
-  let fut  = vec3<f32>(1.00, 0.72, 0.30);
-  let c = mix(past, fut, in.future) * in.alpha;
-  return vec4<f32>(c, in.alpha);
+  return vec4<f32>(in.color.rgb * in.alpha, in.alpha);
 }
 `;
 
@@ -109,6 +110,7 @@ export class OrbitTrackRenderer {
   private readonly highBuf: GPUBuffer;
   private readonly lowBuf: GPUBuffer;
   private readonly periodsBuf: GPUBuffer;
+  private readonly colorBuf: GPUBuffer;
   private readonly passSelBufs: [GPUBuffer, GPUBuffer];
   private readonly passSelGroups: [GPUBindGroup, GPUBindGroup];
   readonly capacity: number;
@@ -175,6 +177,13 @@ export class OrbitTrackRenderer {
       size: Math.max(opts.capacity, 1) * 4,
       usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
     });
+    this.colorBuf = device.createBuffer({
+      size: opts.capacity * 16,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+    });
+    const defaultColors = new Float32Array(opts.capacity * 4);
+    for (let k = 0; k < opts.capacity; k += 1) defaultColors.set([0.55, 0.85, 1.0, 1.0], k * 4);
+    device.queue.writeBuffer(this.colorBuf, 0, defaultColors);
     this.bindGroup = device.createBindGroup({
       layout: this.pipeline.getBindGroupLayout(0),
       entries: [
@@ -182,6 +191,7 @@ export class OrbitTrackRenderer {
         { binding: 1, resource: { buffer: this.highBuf } },
         { binding: 2, resource: { buffer: this.lowBuf } },
         { binding: 3, resource: { buffer: this.periodsBuf } },
+        { binding: 4, resource: { buffer: this.colorBuf } },
       ],
     });
     const mkSel = (v: number): GPUBuffer => {
@@ -218,6 +228,13 @@ export class OrbitTrackRenderer {
 
   clear(): void {
     this.count = 0;
+  }
+
+  /** Per-object RGBA colors (stride 4, [0,1]); alpha channel is reserved. */
+  setColors(rgba: Float32Array): void {
+    const stage = new Float32Array(Math.min(rgba.length, this.capacity * 4));
+    stage.set(rgba.subarray(0, stage.length));
+    this.device.queue.writeBuffer(this.colorBuf, 0, stage);
   }
 
   updateCamera(

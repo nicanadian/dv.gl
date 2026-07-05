@@ -137,6 +137,19 @@ async function main(): Promise<void> {
 
     const view: View = { lonDeg: -75, latDeg: 25, rangeKm: 45_000 };
 
+    // family colors when the source knows object names (EO cyan, SAR gold);
+    // everything else keeps the catalog cyan
+    const familyColors = (): Float32Array | undefined => {
+      if (!source.names) return undefined;
+      const rgba = new Float32Array(source.count * 4);
+      source.names.forEach((name, k) => {
+        const sar = /sar/i.test(name);
+        rgba.set(sar ? [1.0, 0.78, 0.35, 1.0] : [0.55, 0.85, 1.0, 1.0], k * 4);
+      });
+      return rgba;
+    };
+    const colors = familyColors();
+
     // @dvgl/core's first consumer: the MissionClock owns play state, rate, looping,
     // and the scene-time axis; the page just feeds it wall deltas and reads it.
     // ephemeris sources know their own epoch/span; TLE catalogs use the 7-day default
@@ -162,7 +175,10 @@ async function main(): Promise<void> {
     // loop never blocks on evaluation, which is why scrubbing stays smooth
     const clockEl = document.getElementById("clock");
     source.onResult = (positions, minutes, failed) => {
-      renderer ??= new PointRenderer(device, { capacity: source.count, format, depthFormat });
+      if (renderer === undefined) {
+        renderer = new PointRenderer(device, { capacity: source.count, format, depthFormat });
+        if (colors) renderer.setColors(colors);
+      }
       renderer.updatePositions(positions, source.count);
       const d = Math.floor(minutes / 1440);
       const h = Math.floor((minutes % 1440) / 60);
@@ -238,12 +254,15 @@ async function main(): Promise<void> {
       lastWindowCenterMin = Number.NEGATIVE_INFINITY;
     });
     source.onWindow = (windowKm, centerMinutes, samples, periodsMinutes) => {
-      tracks ??= new OrbitTrackRenderer(device, {
-        capacity: source.count,
-        samples,
-        format,
-        depthFormat,
-      });
+      if (tracks === undefined) {
+        tracks = new OrbitTrackRenderer(device, {
+          capacity: source.count,
+          samples,
+          format,
+          depthFormat,
+        });
+        if (colors) tracks.setColors(colors);
+      }
       tracks.setWindow(windowKm, source.count, periodsMinutes);
       lastWindowCenterMin = centerMinutes; // the split offset is measured from HERE
     };

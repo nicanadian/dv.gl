@@ -38,6 +38,8 @@ interface TrackEntry {
 
 export class EphemerisSource implements PropagationSource {
   readonly rejected: { readonly name: string; readonly reason: string }[] = [];
+  /** Object names, aligned with propagation order. */
+  readonly names: string[] = [];
   /** Anchor epoch (Unix ms): the earliest segment start across the file. */
   readonly epochMs: number;
   /** Scene-window length covering every segment, seconds. */
@@ -58,6 +60,7 @@ export class EphemerisSource implements PropagationSource {
           3,
         );
         this.entries.push({ track, startSec: track.startSec, endSec: track.endSec });
+        this.names.push(seg.objectName);
         end = Math.max(end, track.endSec);
       } catch (err) {
         this.rejected.push({ name: seg.objectName, reason: String(err) });

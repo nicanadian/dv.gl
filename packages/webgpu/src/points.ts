@@ -36,10 +36,12 @@ struct Camera {
 @group(0) @binding(0) var<uniform> cam : Camera;
 @group(0) @binding(1) var<storage, read> posHigh : array<vec4<f32>>;
 @group(0) @binding(2) var<storage, read> posLow  : array<vec4<f32>>;
+@group(0) @binding(3) var<storage, read> colors  : array<vec4<f32>>;
 
 struct VsOut {
   @builtin(position) clip : vec4<f32>,
   @location(0) uv : vec2<f32>,
+  @location(1) color : vec4<f32>,
 };
 
 // Two triangles per point sprite, expanded in clip space.
@@ -62,6 +64,7 @@ fn vs(@builtin(vertex_index) v : u32, @builtin(instance_index) i : u32) -> VsOut
   var out : VsOut;
   out.clip = clip;
   out.uv = corner;
+  out.color = colors[i];
   return out;
 }
 
@@ -70,8 +73,8 @@ fn fs(in : VsOut) -> @location(0) vec4<f32> {
   // circular sprite with a soft edge
   let r2 = dot(in.uv, in.uv);
   if (r2 > 1.0) { discard; }
-  let alpha = 1.0 - smoothstep(0.7, 1.0, r2);
-  return vec4<f32>(0.55, 0.85, 1.0, alpha);
+  let alpha = (1.0 - smoothstep(0.7, 1.0, r2)) * in.color.a;
+  return vec4<f32>(in.color.rgb, alpha);
 }
 `;
 
@@ -95,6 +98,7 @@ export class PointRenderer {
   private readonly cameraBuf: GPUBuffer;
   private readonly highBuf: GPUBuffer;
   private readonly lowBuf: GPUBuffer;
+  private readonly colorBuf: GPUBuffer;
   private readonly capacity: number;
   private readonly pointSizePx: number;
   // preallocated staging arrays: the per-epoch update path does not allocate
@@ -154,14 +158,30 @@ export class PointRenderer {
       size: this.cameraStage.byteLength,
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
+    this.colorBuf = device.createBuffer({
+      size: opts.capacity * 16,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+    });
+    // default: the catalog cyan for every object
+    const defaultColors = new Float32Array(opts.capacity * 4);
+    for (let k = 0; k < opts.capacity; k += 1) defaultColors.set([0.55, 0.85, 1.0, 1.0], k * 4);
+    device.queue.writeBuffer(this.colorBuf, 0, defaultColors);
     this.bindGroup = device.createBindGroup({
       layout: this.pipeline.getBindGroupLayout(0),
       entries: [
         { binding: 0, resource: { buffer: this.cameraBuf } },
         { binding: 1, resource: { buffer: this.highBuf } },
         { binding: 2, resource: { buffer: this.lowBuf } },
+        { binding: 3, resource: { buffer: this.colorBuf } },
       ],
     });
+  }
+
+  /** Per-object RGBA colors (stride 4, [0,1]). */
+  setColors(rgba: Float32Array): void {
+    const stage = new Float32Array(Math.min(rgba.length, this.capacity * 4));
+    stage.set(rgba.subarray(0, stage.length));
+    this.device.queue.writeBuffer(this.colorBuf, 0, stage);
   }
 
   /**

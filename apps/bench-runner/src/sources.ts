@@ -46,6 +46,8 @@ export interface AsyncSource {
   /** Ephemeris-backed sources know their own epoch and span. */
   readonly epochMs?: number;
   readonly windowSeconds?: number;
+  /** Object names aligned with buffer order, when the source knows them. */
+  readonly names?: readonly string[];
   /** Request evaluation at scene time (minutes). Latest request wins. */
   request(minutes: number): void;
   onResult?: (positions: Float32Array, minutes: number, failed: number) => void;
@@ -143,6 +145,7 @@ async function makeOemSource(): Promise<AsyncSource> {
     rejected: inner.rejected.length,
     epochMs: inner.epochMs,
     windowSeconds: inner.windowSeconds,
+    names: inner.names,
     request(minutes: number): void {
       const { failed } = inner.propagateInto(minutes, positions);
       api.onResult?.(positions, minutes, failed);
@@ -169,6 +172,7 @@ async function makeCzmlSource(): Promise<AsyncSource> {
     rejected: inner.rejected.length,
     epochMs: inner.epochMs,
     windowSeconds: inner.windowSeconds,
+    names: inner.names,
     request(minutes: number): void {
       const { failed } = inner.propagateInto(minutes, positions);
       api.onResult?.(positions, minutes, failed);
