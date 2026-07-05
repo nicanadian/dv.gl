@@ -20,7 +20,7 @@
  * no metrics, input is yours. This is the seed of the actual product demo.
  */
 import { MissionClock, TimelineMarks } from "@dvgl/core";
-import { ecefToSurface, gmst } from "@dvgl/frames";
+import { ecefToGeodetic, ecefToSurface, geodeticToEcef, gmst } from "@dvgl/frames";
 import {
   decodePickedIndex,
   EarthRenderer,
@@ -30,7 +30,9 @@ import {
 } from "@dvgl/webgpu";
 import {
   catalogEpochMs,
+  CoverageGrid,
   elevationDeg,
+  footprintCentralAngleRad,
   footprintRing,
   parseCatalog,
   stationEcef,
@@ -98,6 +100,16 @@ interface View {
   lonDeg: number;
   latDeg: number;
   rangeKm: number;
+}
+
+/** Coverage heat ramp: blue (low) -> yellow -> red (high). */
+function heat(t: number): [number, number, number] {
+  if (t < 0.5) {
+    const u = t * 2;
+    return [0.2 + 0.8 * u, 0.4 + 0.6 * u, 1 - 0.7 * u];
+  }
+  const u = (t - 0.5) * 2;
+  return [1, 1 - 0.7 * u, 0.3 - 0.1 * u];
 }
 
 function eyeFrom(view: View): [number, number, number] {
@@ -306,6 +318,22 @@ async function main(): Promise<void> {
     });
     const fpSeg = new Float32Array(source.count * FP_SEGMENTS * 2 * 3);
     const fpCol = new Float32Array(source.count * FP_SEGMENTS * 2 * 4);
+
+    // V7 coverage accumulation: an equirect grid the footprints stamp as time
+    // advances, rendered as a heat point-cloud on the surface.
+    const coverage = new CoverageGrid(90, 180);
+    const coverageBox = document.getElementById("coverage") as HTMLInputElement;
+    coverageBox.addEventListener("change", () => {
+      if (coverageBox.checked) coverage.reset();
+    });
+    const covPts = new PointRenderer(device, {
+      capacity: 90 * 180,
+      format,
+      depthFormat,
+      pointSizePx: 3,
+    });
+    const covPos = new Float32Array(90 * 180 * 3);
+    const covCol = new Float32Array(90 * 180 * 4);
     source.onResult = (positions, minutes, failed) => {
       latestPositions = positions;
       if (renderer === undefined) {
@@ -334,6 +362,24 @@ async function main(): Promise<void> {
       }
       prevPositions.set(positions.subarray(0, source.count * 3));
       prevMin = minutes;
+      // V7: accumulate coverage as scene time advances (footprint sub-points)
+      if (coverageBox.checked) {
+        const theta = gmst(clock.epochMs + minutes * 60_000);
+        const cc = Math.cos(theta);
+        const ss = Math.sin(theta);
+        for (let k = 0; k < source.count; k += 1) {
+          if (colors && (colors[k * 4 + 3] ?? 1) === 0) continue;
+          const x = positions[k * 3] ?? Number.NaN;
+          const y = positions[k * 3 + 1] ?? Number.NaN;
+          const z = positions[k * 3 + 2] ?? Number.NaN;
+          if (!Number.isFinite(x)) continue;
+          const ex = cc * x + ss * y;
+          const ey = -ss * x + cc * y;
+          const g = ecefToGeodetic(ex, ey, z);
+          const r = Math.hypot(ex, ey, z);
+          coverage.stamp(g.latDeg, g.lonDeg, footprintCentralAngleRad(r, perObjHalfAngle?.[k] ?? 18));
+        }
+      }
       const d = Math.floor(minutes / 1440);
       const h = Math.floor((minutes % 1440) / 60);
       const m = Math.floor(minutes % 60);
@@ -688,6 +734,30 @@ async function main(): Promise<void> {
         footprintLines.updateCamera(viewProjRte, eye);
       }
 
+      // V7: rebuild the coverage heat point-cloud from the accumulated grid
+      if (coverageBox.checked) {
+        const cg2 = Math.cos(gmstRad);
+        const sg2 = Math.sin(gmstRad);
+        const maxV = coverage.max() || 1;
+        let ci = 0;
+        coverage.forEachCovered((lat, lon, v) => {
+          const e = geodeticToEcef(lat, lon, 8);
+          covPos[ci * 3] = cg2 * e[0] - sg2 * e[1]; // ECEF -> world (Rz(+gmst))
+          covPos[ci * 3 + 1] = sg2 * e[0] + cg2 * e[1];
+          covPos[ci * 3 + 2] = e[2];
+          const t = Math.min(1, v / maxV);
+          const c = heat(t);
+          covCol[ci * 4] = c[0];
+          covCol[ci * 4 + 1] = c[1];
+          covCol[ci * 4 + 2] = c[2];
+          covCol[ci * 4 + 3] = 0.7;
+          ci += 1;
+        });
+        covPts.updatePositions(covPos, ci);
+        covPts.setColors(covCol.subarray(0, ci * 4));
+        covPts.updateCamera(viewProjRte, eye, canvas.width, canvas.height);
+      }
+
       const encoder = device.createCommandEncoder();
       const pass = encoder.beginRenderPass({
         colorAttachments: [
@@ -706,6 +776,7 @@ async function main(): Promise<void> {
         },
       });
       earth.draw(pass); // writes depth: satellites occlude behind the planet
+      if (coverageBox.checked) covPts.draw(pass); // heat overlay on the surface
       if (trackMode() !== "none") tracks?.draw(pass); // under the points
       if (stationsBox.checked) {
         accessLines.draw(pass);
