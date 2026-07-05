@@ -21,6 +21,7 @@
  * which one actually ran. Globe/imagery disabled per the fairness boundary.
  */
 import * as Cesium from "cesium";
+import "cesium/Build/Cesium/Widgets/widgets.css";
 import { publishResult, type RenderPath, runScenario } from "./runner.js";
 
 const KM = 1000;

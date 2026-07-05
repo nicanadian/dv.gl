@@ -18,7 +18,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { parseCatalog } from "./catalog.js";
-import { catalogEpochMs, jdayToUnixMs, SatelliteJsSource } from "./propagation.js";
+import { catalogEpochMs, jdayToUnixMs, readPosition, SatelliteJsSource } from "./propagation.js";
 
 // Reuse the validated fp64 reference fixture from @dvgl/validate (monorepo path;
 // test-only). Its TLE was produced by python-sgp4's exporter, so it is valid.
@@ -105,5 +105,20 @@ describe("catalog", () => {
 
   it("jdayToUnixMs maps the Unix epoch Julian day to 0", () => {
     expect(jdayToUnixMs(2440587.5)).toBe(0);
+  });
+});
+
+describe("readPosition (satellite.js failure shapes)", () => {
+  it("maps every observed failure shape to undefined", () => {
+    expect(readPosition(false)).toBeUndefined();
+    expect(readPosition(undefined)).toBeUndefined();
+    expect(readPosition(null)).toBeUndefined();
+    expect(readPosition({})).toBeUndefined();
+    expect(readPosition({ position: false })).toBeUndefined();
+    expect(readPosition({ position: undefined })).toBeUndefined();
+    expect(readPosition({ position: null })).toBeUndefined();
+    expect(readPosition({ position: { x: Number.NaN, y: 0, z: 0 } })).toBeUndefined();
+    expect(readPosition({ position: { x: 1 } })).toBeUndefined();
+    expect(readPosition({ position: { x: 1, y: 2, z: 3 } })).toEqual({ x: 1, y: 2, z: 3 });
   });
 });

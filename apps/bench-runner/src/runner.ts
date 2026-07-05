@@ -70,11 +70,11 @@ export async function loadSharedWorkload(): Promise<{
   catalogSource: string;
   catalogSha256: string;
 }> {
-  const resp = await fetch("./catalog.json");
+  // real snapshot (gitignored, via scripts/fetch-catalog.mjs) or the committed sample
+  let resp = await fetch("./catalog.json");
+  if (!resp.ok) resp = await fetch("./catalog.sample.json");
   if (!resp.ok) {
-    throw new Error(
-      `catalog.json missing (${resp.status}). Run scripts/fetch-catalog.mjs or use the committed sample.`,
-    );
+    throw new Error(`no catalog found (${resp.status}): run scripts/fetch-catalog.mjs`);
   }
   const catalog = parseCatalog(await resp.text());
   const epochMs = catalogEpochMs(catalog.objects);

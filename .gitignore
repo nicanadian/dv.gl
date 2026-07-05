@@ -20,3 +20,4 @@ coverage/
 *.log
 .env
 .env.*
+apps/bench-runner/public/catalog.json

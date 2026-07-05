@@ -74,15 +74,8 @@ export class SatelliteJsSource implements PropagationSource {
       }
       // twoline2satrec is lenient: garbage lines can parse to NaN elements with
       // error still 0. Gate on an actual propagation at the TLE's own epoch.
-      const probe = satellite.sgp4(satrec, 0) as unknown as
-        | false
-        | { position: boolean | { x: number } };
-      if (
-        !Number.isFinite(satrec.jdsatepoch) ||
-        probe === false ||
-        typeof probe.position === "boolean" ||
-        !Number.isFinite(probe.position.x)
-      ) {
+      const probe = readPosition(satellite.sgp4(satrec, 0));
+      if (!Number.isFinite(satrec.jdsatepoch) || probe === undefined) {
         this.rejected.push({ name: o.name, reason: "non-finite propagation at epoch" });
         continue;
       }
@@ -111,26 +104,46 @@ export class SatelliteJsSource implements PropagationSource {
       const rec = this.recs[k];
       if (rec === undefined) continue;
       const t = minutesSinceEpoch + rec.epochOffsetMinutes;
-      // The 5.x typings say sgp4 never returns false, but older API surfaces did;
-      // widen at the boundary and keep the defensive check.
-      const result = satellite.sgp4(rec.satrec, t) as unknown as
-        | false
-        | { position: boolean | { x: number; y: number; z: number } };
+      const pos = readPosition(satellite.sgp4(rec.satrec, t));
       const base = k * 3;
-      if (result === false || typeof result.position === "boolean") {
+      if (pos === undefined) {
         out[base] = Number.NaN;
         out[base + 1] = Number.NaN;
         out[base + 2] = Number.NaN;
         failed += 1;
       } else {
-        out[base] = result.position.x;
-        out[base + 1] = result.position.y;
-        out[base + 2] = result.position.z;
+        out[base] = pos.x;
+        out[base + 1] = pos.y;
+        out[base + 2] = pos.z;
         written += 1;
       }
     }
     return { written, failed };
   }
+}
+
+/**
+ * Extract a finite position from whatever satellite.js sgp4 returned. Observed
+ * failure shapes across versions and orbit regimes: `false`, `position: false`,
+ * `position: undefined` (objects that error mid-window, e.g. decayed or deep-space
+ * edge cases in a real catalog), and NaN components. All map to `undefined`.
+ */
+export function readPosition(result: unknown): { x: number; y: number; z: number } | undefined {
+  if (result === null || typeof result !== "object") return undefined;
+  const pos = (result as { position?: unknown }).position;
+  if (pos === null || typeof pos !== "object") return undefined;
+  const p = pos as { x?: unknown; y?: unknown; z?: unknown };
+  if (
+    typeof p.x !== "number" ||
+    typeof p.y !== "number" ||
+    typeof p.z !== "number" ||
+    !Number.isFinite(p.x) ||
+    !Number.isFinite(p.y) ||
+    !Number.isFinite(p.z)
+  ) {
+    return undefined;
+  }
+  return { x: p.x, y: p.y, z: p.z };
 }
 
 /** Julian day to Unix epoch milliseconds. */
