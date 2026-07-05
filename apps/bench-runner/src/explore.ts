@@ -128,11 +128,16 @@ async function main(): Promise<void> {
 
     // @dvgl/core's first consumer: the MissionClock owns play state, rate, looping,
     // and the scene-time axis; the page just feeds it wall deltas and reads it.
+    // ephemeris sources know their own epoch/span; TLE catalogs use the 7-day default
+    const windowSeconds = source.windowSeconds ?? WINDOW_MINUTES * 60;
     const clock = new MissionClock({
-      epochMs: catalogEpochMs(parseCatalog(catalog.text).objects) ?? 0,
-      windowSeconds: WINDOW_MINUTES * 60,
-      rate: 600,
+      epochMs: source.epochMs ?? catalogEpochMs(parseCatalog(catalog.text).objects) ?? 0,
+      windowSeconds,
+      rate: source.windowSeconds !== undefined ? 60 : 600,
     });
+    (document.getElementById("time") as HTMLInputElement).max = String(
+      Math.floor(windowSeconds / 60) - 1,
+    );
     clock.play();
     let dirty = true;
 

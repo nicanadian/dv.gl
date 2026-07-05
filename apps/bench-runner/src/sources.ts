@@ -27,14 +27,24 @@
  * deliver results via onResult(positions, minutes, failed).
  */
 import * as satellite from "satellite.js";
-import { catalogEpochMs, jdayToUnixMs, parseCatalog, SatelliteJsSource } from "@dvgl/orbits";
+import {
+  catalogEpochMs,
+  EphemerisSource,
+  jdayToUnixMs,
+  parseCatalog,
+  parseOem,
+  SatelliteJsSource,
+} from "@dvgl/orbits";
 
-export type SourceMode = "main" | "worker" | "sgp4gl";
+export type SourceMode = "main" | "worker" | "sgp4gl" | "oem";
 
 export interface AsyncSource {
   readonly label: string;
   readonly count: number;
   readonly rejected: number;
+  /** Ephemeris-backed sources know their own epoch and span. */
+  readonly epochMs?: number;
+  readonly windowSeconds?: number;
   /** Request evaluation at scene time (minutes). Latest request wins. */
   request(minutes: number): void;
   onResult?: (positions: Float32Array, minutes: number, failed: number) => void;
@@ -59,9 +69,9 @@ export async function loadCatalogText(): Promise<{
 /** Read benchmark variant knobs from the page URL. */
 export function readVariant(): { mode: SourceMode; multiplier: number } {
   const params = new URLSearchParams(location.search);
-  const rawMode = params.get("prop") ?? "worker";
+  const rawMode = params.get("prop") ?? (params.get("src") === "oem" ? "oem" : "worker");
   const mode: SourceMode =
-    rawMode === "main" || rawMode === "sgp4gl" ? rawMode : "worker";
+    rawMode === "main" || rawMode === "sgp4gl" || rawMode === "oem" ? rawMode : "worker";
   const multiplier = Math.max(1, Math.min(64, Number(params.get("x") ?? "1") || 1));
   return { mode, multiplier };
 }
@@ -73,7 +83,33 @@ export async function makeSource(
 ): Promise<AsyncSource> {
   if (mode === "main") return makeMainSource(catalogText, multiplier);
   if (mode === "worker") return await makeWorkerSource(catalogText, multiplier);
+  if (mode === "oem") return await makeOemSource();
   return await makeSgp4GlSource(catalogText, multiplier);
+}
+
+// ---- OEM ephemeris (mission products; the pdb-sim dogfood bridge) ----
+
+async function makeOemSource(): Promise<AsyncSource> {
+  const url = new URLSearchParams(location.search).get("url") ?? "./mission.oem";
+  let resp = await fetch(url);
+  if (!resp.ok && url === "./mission.oem") resp = await fetch("./mission.sample.oem");
+  if (!resp.ok) throw new Error(`OEM fetch failed (${resp.status}): ${url}`);
+  const file = parseOem(await resp.text());
+  const inner = new EphemerisSource(file.segments);
+  const positions = new Float32Array(inner.count * 3);
+  const api: AsyncSource = {
+    label: `OEM ephemeris (${file.originator}, ${inner.count} objects)`,
+    count: inner.count,
+    rejected: inner.rejected.length,
+    epochMs: inner.epochMs,
+    windowSeconds: inner.windowSeconds,
+    request(minutes: number): void {
+      const { failed } = inner.propagateInto(minutes, positions);
+      api.onResult?.(positions, minutes, failed);
+    },
+    dispose(): void {},
+  };
+  return api;
 }
 
 // ---- main-thread (v0 baseline) ----

@@ -21,3 +21,4 @@ coverage/
 .env
 .env.*
 apps/bench-runner/public/catalog.json
+apps/bench-runner/public/mission.oem
