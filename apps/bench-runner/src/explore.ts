@@ -333,24 +333,11 @@ async function main(): Promise<void> {
     const swathFor = (fam: string | undefined): SwathOptions => SWATH[fam ?? ""] ?? SWATH_EO;
     // coverage still stamps a nadir cap; use the outer look angle as its half-angle
     const perObjHalfAngle = families?.map((f) => swathFor(f).outerOffNadirDeg);
-    const footprintsBox = document.getElementById("footprints") as HTMLInputElement;
-    // filled ground area (translucent, flat alpha per the style rule)
-    const footprintFill = new TriRenderer(device, {
-      capacity: source.count * (SWATH_SEG - 1) * 2 * 3,
-      format,
-      depthFormat,
-    });
-    const fpTriPos = new Float32Array(source.count * (SWATH_SEG - 1) * 2 * 3 * 3);
-    const fpTriCol = new Float32Array(source.count * (SWATH_SEG - 1) * 2 * 3 * 4);
-    // crisp edge outline (near edge, far edge, two end caps)
+    // swath-outline sizing (near edge, far edge, two end caps), reused by field of regard
     const FP_OUTLINE_SEG = SWATH_SEG * 2 + 2;
-    const footprintLines = new LineRenderer(device, {
-      capacity: source.count * FP_OUTLINE_SEG * 2,
-      format,
-      depthFormat,
-    });
-    const fpSeg = new Float32Array(source.count * FP_OUTLINE_SEG * 2 * 3);
-    const fpCol = new Float32Array(source.count * FP_OUTLINE_SEG * 2 * 4);
+    // NOTE: the "footprint" layer is retired for now -- it will return as an actual
+    // tasked collect (planned ground box + spacecraft->footprint beam during the
+    // collect window), driven by real csched collects, not a nominal swath band.
 
     // Field-of-regard ENVELOPE -- everywhere a sensor COULD steer to (not where it
     // is pointed, and NOT "coverage"). Same swath primitive widened to the full
@@ -486,12 +473,9 @@ async function main(): Promise<void> {
     const mapPts = new PointRenderer(device, { capacity: source.count, format, pointSizePx: 4 });
     const mapGrat = new LineRenderer(device, { capacity: 4096, format });
     const mapTracks = new LineRenderer(device, { capacity: source.count * TRACK_SAMPLES * 2, format });
-    const mapFp = new TriRenderer(device, { capacity: source.count * (SWATH_SEG - 1) * 2 * 3, format });
     const mapPos = new Float32Array(source.count * 3);
     const mapTrkPos = new Float32Array(source.count * TRACK_SAMPLES * 2 * 3);
     const mapTrkCol = new Float32Array(source.count * TRACK_SAMPLES * 2 * 4);
-    const mapFpPos = new Float32Array(source.count * (SWATH_SEG - 1) * 2 * 3 * 3);
-    const mapFpCol = new Float32Array(source.count * (SWATH_SEG - 1) * 2 * 3 * 4);
     // static graticule (30deg grid + border)
     {
       const seg: number[] = [];
@@ -605,61 +589,6 @@ async function main(): Promise<void> {
         mapTracks.setSegments(mapTrkPos.subarray(0, tv * 3), mapTrkCol.subarray(0, tv * 4), tv / 2);
         mapTracks.updateCamera(vp, eye0);
       }
-      // footprint swaths: project the velocity-frame ground band to plane coords,
-      // filled. Triangles that straddle the antimeridian are dropped (else smear).
-      let ftv = 0;
-      if (footprintsBox.checked && latestPositions) {
-        const toPlane = (e: Float32Array): Float32Array => {
-          const seg = e.length / 3;
-          const out = new Float32Array(seg * 2);
-          for (let j = 0; j < seg; j += 1) {
-            const px = e[j * 3] ?? 0;
-            const py = e[j * 3 + 1] ?? 0;
-            const g = ecefToGeodetic(cc * px + ss * py, -ss * px + cc * py, e[j * 3 + 2] ?? 0);
-            out[j * 2] = g.lonDeg / 90;
-            out[j * 2 + 1] = g.latDeg / 90;
-          }
-          return out;
-        };
-        for (let k = 0; k < source.count; k += 1) {
-          if (colors && (colors[k * 4 + 3] ?? 1) === 0) continue;
-          const x = latestPositions[k * 3] ?? Number.NaN;
-          if (!Number.isFinite(x)) continue;
-          const vx = dirVec[k * 3] ?? 0;
-          const vy = dirVec[k * 3 + 1] ?? 0;
-          const vz = dirVec[k * 3 + 2] ?? 0;
-          if (vx === 0 && vy === 0 && vz === 0) continue;
-          const { near, far } = sensorSwathEdges(
-            [x, latestPositions[k * 3 + 1] ?? 0, latestPositions[k * 3 + 2] ?? 0],
-            [vx, vy, vz],
-            swathFor(families?.[k]),
-          );
-          const nl = toPlane(near);
-          const fl = toPlane(far);
-          const seg = near.length / 3;
-          const cr = colors?.[k * 4] ?? 0.6;
-          const cg2 = colors?.[k * 4 + 1] ?? 0.85;
-          const cb = colors?.[k * 4 + 2] ?? 1.0;
-          for (let j = 0; j < seg - 1; j += 1) {
-            const xs = [nl[j * 2], fl[j * 2], nl[(j + 1) * 2], fl[(j + 1) * 2]].map((v) => v ?? 0);
-            // antimeridian guard: skip if the quad spans more than half the map in x
-            if (Math.max(...xs) - Math.min(...xs) > 2) continue;
-            const quad = [
-              nl[j * 2], nl[j * 2 + 1], fl[j * 2], fl[j * 2 + 1], nl[(j + 1) * 2], nl[(j + 1) * 2 + 1],
-              fl[j * 2], fl[j * 2 + 1], fl[(j + 1) * 2], fl[(j + 1) * 2 + 1], nl[(j + 1) * 2], nl[(j + 1) * 2 + 1],
-            ];
-            for (let c = 0; c < 6; c += 1) {
-              mapFpPos[ftv * 3] = quad[c * 2] ?? 0;
-              mapFpPos[ftv * 3 + 1] = quad[c * 2 + 1] ?? 0;
-              mapFpPos[ftv * 3 + 2] = 0;
-              mapFpCol.set([cr, cg2, cb, 0.22], ftv * 4);
-              ftv += 1;
-            }
-          }
-        }
-        mapFp.setTriangles(mapFpPos.subarray(0, ftv * 3), mapFpCol.subarray(0, ftv * 4), ftv / 3);
-        mapFp.updateCamera(vp, eye0);
-      }
       if (coverageBox.checked) {
         revisit.ageTexture(clock.currentSeconds / 60, COV_WINDOW_MIN, ageBuf);
         coveragePlane.setField(ageBuf);
@@ -680,7 +609,6 @@ async function main(): Promise<void> {
       if (coverageBox.checked) coveragePlane.draw(pass); // filled field, beneath all
       mapGrat.draw(pass);
       if (tv > 0) mapTracks.draw(pass);
-      if (ftv > 0) mapFp.draw(pass);
       if (stationsOn) mapStationPts.draw(pass);
       mapPts.draw(pass);
       pass.end();
@@ -1143,20 +1071,6 @@ async function main(): Promise<void> {
         accessLineR.clear();
       }
 
-      // V5: sensor footprint SWATHS -- a filled ground band following the velocity
-      // frame, plus a crisp edge outline. SAR one-sided strip / EO straddle band.
-      if (footprintsBox.checked) {
-        const inc = (k: number): boolean => !(colors && (colors[k * 4 + 3] ?? 1) === 0);
-        const r = buildSwaths(inc, swathFor, fpTriPos, fpTriCol, fpSeg, fpCol, 0.18, 0.8);
-        footprintFill.setTriangles(fpTriPos, fpTriCol, r.tris);
-        footprintFill.updateCamera(viewProjRte, eye);
-        footprintLines.setSegments(fpSeg, fpCol, r.segs);
-        footprintLines.updateCamera(viewProjRte, eye);
-      } else {
-        footprintFill.clear();
-        footprintLines.clear();
-      }
-
       // COVERAGE: age-of-collection field draped on the globe (viridis, GMST-spun
       // so it sits earth-fixed like the footprints that wrote it)
       if (coverageBox.checked) {
@@ -1249,12 +1163,8 @@ async function main(): Promise<void> {
         stationPts.draw(pass);
       }
       if (accessBox.checked) {
-        accessFill.draw(pass); // FOR envelope, under the footprint
+        accessFill.draw(pass); // field-of-regard envelope
         accessLineR.draw(pass);
-      }
-      if (footprintsBox.checked) {
-        footprintFill.draw(pass); // filled ground area, under...
-        footprintLines.draw(pass); // ...the crisp edge outline
       }
       if (headingBox.checked) headingLines.draw(pass);
       renderer?.draw(pass);
