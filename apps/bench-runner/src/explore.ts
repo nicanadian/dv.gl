@@ -182,6 +182,11 @@ async function main(): Promise<void> {
     // full-catalog windows are count*samples SGP4 evals; gate to fleet-scale sets
     const tracksAffordable = source.requestWindow !== undefined && source.count <= 512;
     let lastWindowCenterMin = Number.NEGATIVE_INFINITY;
+    // latest window buffer kept CPU-side so the 2D map can reproject it to ground
+    // tracks; only usable there when the window was sampled in ECEF (per-sample GMST)
+    let winRaw: Float32Array | undefined;
+    let winSamples = 0;
+    let winIsEcef = false;
 
     const view: View = { lonDeg: -75, latDeg: 25, rangeKm: 45_000 };
 
@@ -242,6 +247,13 @@ async function main(): Promise<void> {
         tracks?.setColors(colors);
       }
     };
+    // layers dock (top-left, collapsible): view mode + overlay toggles live here,
+    // so the bottom bar is pure transport and the timeline keeps its full width.
+    {
+      const lp = document.getElementById("layers") as HTMLElement;
+      const lh = document.getElementById("layersHead") as HTMLElement;
+      lh.addEventListener("click", () => lp.classList.toggle("collapsed"));
+    }
     // build the mission-objects panel (top-right, collapsible)
     const panel = document.getElementById("objects") as HTMLElement;
     if (families && groups.length > 0) {
@@ -341,7 +353,10 @@ async function main(): Promise<void> {
     const mapPts = new PointRenderer(device, { capacity: source.count, format, pointSizePx: 4 });
     const mapCov = new PointRenderer(device, { capacity: 90 * 180, format, pointSizePx: 3 });
     const mapGrat = new LineRenderer(device, { capacity: 4096, format });
+    const mapTracks = new LineRenderer(device, { capacity: source.count * TRACK_SAMPLES * 2, format });
     const mapPos = new Float32Array(source.count * 3);
+    const mapTrkPos = new Float32Array(source.count * TRACK_SAMPLES * 2 * 3);
+    const mapTrkCol = new Float32Array(source.count * TRACK_SAMPLES * 2 * 4);
     // static graticule (30deg grid + border)
     {
       const seg: number[] = [];
@@ -394,6 +409,57 @@ async function main(): Promise<void> {
       if (colors) mapPts.setColors(colors);
       mapPts.updateCamera(vp, eye0, canvas.width, canvas.height);
       mapGrat.updateCamera(vp, eye0);
+      // ground tracks: reproject the ECEF orbit window to sub-satellite lon/lat
+      // polylines, splitting each trace at the antimeridian so it doesn't smear
+      // a horizontal streak across the map.
+      let tv = 0;
+      if (trackMode() !== "none" && winRaw && winIsEcef && winSamples > 1) {
+        const w = winRaw;
+        for (let k = 0; k < source.count; k += 1) {
+          if (colors && (colors[k * 4 + 3] ?? 1) === 0) continue; // family filtered off
+          const cr = colors?.[k * 4] ?? 0.6;
+          const cg = colors?.[k * 4 + 1] ?? 0.8;
+          const cb = colors?.[k * 4 + 2] ?? 1;
+          const base = k * winSamples * 3;
+          let plon = Number.NaN;
+          let plat = Number.NaN;
+          let pok = false;
+          for (let s = 0; s < winSamples; s += 1) {
+            const b = base + s * 3;
+            const x = w[b] ?? Number.NaN;
+            let lon = Number.NaN;
+            let lat = Number.NaN;
+            let ok = false;
+            if (Number.isFinite(x)) {
+              const g = ecefToGeodetic(x, w[b + 1] ?? 0, w[b + 2] ?? 0);
+              lon = g.lonDeg;
+              lat = g.latDeg;
+              ok = true;
+            }
+            if (pok && ok && Math.abs(lon - plon) < 180) {
+              mapTrkPos[tv * 3] = plon / 90;
+              mapTrkPos[tv * 3 + 1] = plat / 90;
+              mapTrkCol[tv * 4] = cr;
+              mapTrkCol[tv * 4 + 1] = cg;
+              mapTrkCol[tv * 4 + 2] = cb;
+              mapTrkCol[tv * 4 + 3] = 0.65;
+              tv += 1;
+              mapTrkPos[tv * 3] = lon / 90;
+              mapTrkPos[tv * 3 + 1] = lat / 90;
+              mapTrkCol[tv * 4] = cr;
+              mapTrkCol[tv * 4 + 1] = cg;
+              mapTrkCol[tv * 4 + 2] = cb;
+              mapTrkCol[tv * 4 + 3] = 0.65;
+              tv += 1;
+            }
+            plon = lon;
+            plat = lat;
+            pok = ok;
+          }
+        }
+        mapTracks.setSegments(mapTrkPos.subarray(0, tv * 3), mapTrkCol.subarray(0, tv * 4), tv / 2);
+        mapTracks.updateCamera(vp, eye0);
+      }
       let cv = 0;
       if (coverageBox.checked) {
         const maxV = coverage.max() || 1;
@@ -426,6 +492,7 @@ async function main(): Promise<void> {
       });
       mapGrat.draw(pass);
       if (coverageBox.checked) mapCov.draw(pass);
+      if (tv > 0) mapTracks.draw(pass);
       mapPts.draw(pass);
       pass.end();
       device.queue.submit([enc.finish()]);
@@ -629,8 +696,10 @@ async function main(): Promise<void> {
     const trackModeSel = document.getElementById("trackmode") as HTMLSelectElement;
     const trackMode = (): "none" | "orbit" | "ground" =>
       trackModeSel.value as "none" | "orbit" | "ground";
-    // ground tracks are inherently earth-fixed; orbit tracks follow the camera frame
-    const trackEcef = (): boolean => trackMode() === "ground" || ecefBox.checked;
+    // ground tracks are inherently earth-fixed; orbit tracks follow the camera
+    // frame; the 2D map always needs ECEF samples to draw sub-satellite traces
+    const trackEcef = (): boolean =>
+      trackMode() === "ground" || ecefBox.checked || map2dBox.checked;
     if (!tracksAffordable) {
       trackModeSel.disabled = true;
       (trackModeSel.parentElement as HTMLElement).title =
@@ -644,6 +713,7 @@ async function main(): Promise<void> {
       invalidateWindow();
     });
     ecefBox.addEventListener("change", invalidateWindow);
+    map2dBox.addEventListener("change", invalidateWindow); // reframe window to ECEF
     // ground mode replaces each window sample with its sub-satellite surface point
     const surfaceScratch = new Float32Array(source.count * TRACK_SAMPLES * 3);
     source.onWindow = (windowKm, centerMinutes, samples, periodsMinutes) => {
@@ -673,6 +743,9 @@ async function main(): Promise<void> {
         buf = surfaceScratch;
       }
       tracks.setWindow(buf, source.count, periodsMinutes);
+      winRaw = windowKm; // raw (un-surfaced) samples for the 2D ground-track reprojection
+      winSamples = samples;
+      winIsEcef = trackEcef();
       lastWindowCenterMin = centerMinutes; // the split offset is measured from HERE
     };
 

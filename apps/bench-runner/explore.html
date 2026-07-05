@@ -14,8 +14,8 @@
       #pick { position: fixed; top: 8px; left: 50%; transform: translateX(-50%); z-index: 9;
               color: #eef; font: 13px monospace; padding: 3px 10px; border-radius: 4px;
               background: rgba(20,26,48,0.9); display: none; pointer-events: none; }
-      #bar { position: fixed; bottom: 0; left: 0; right: 0; display: flex; gap: 12px;
-             align-items: center; padding: 14px 18px; background: rgba(16,20,38,0.95);
+      #bar { position: fixed; bottom: 0; left: 0; right: 0; display: flex; gap: 14px;
+             align-items: center; padding: 12px 18px; background: rgba(16,20,38,0.95);
              border-top: 1px solid #35406b; z-index: 9; }
       #bar label { color: #8da2d8; font: 12px monospace; white-space: nowrap; }
       #timeMarks { position: fixed; height: 7px; z-index: 10; pointer-events: none; }
@@ -23,15 +23,22 @@
       #time { flex: 1; height: 22px; accent-color: #6ab7ff; cursor: pointer; }
       button, select { background: #26335c; color: #dbe6ff; border: 1px solid #4a5a94;
                        border-radius: 5px; font: 14px monospace; padding: 6px 14px; cursor: pointer; }
-      #objects { position: fixed; top: 32px; right: 12px; z-index: 9;
-                 background: rgba(16,20,38,0.92); border: 1px solid #35406b;
-                 border-radius: 6px; font: 12px monospace; color: #cdd8f0;
-                 min-width: 168px; display: none; }
-      #objectsHead { padding: 7px 10px; cursor: pointer; user-select: none;
-                     color: #8da2d8; border-bottom: 1px solid #2a3252; letter-spacing: .04em; }
-      #objectsBody { padding: 4px 4px 6px; }
-      #objects.collapsed #objectsBody { display: none; }
-      #objects.collapsed #objectsHead { border-bottom: none; }
+      /* shared floating-panel chrome for the layers (left) + objects (right) docks */
+      .panel { position: fixed; top: 32px; z-index: 9; background: rgba(16,20,38,0.92);
+               border: 1px solid #35406b; border-radius: 6px; font: 12px monospace;
+               color: #cdd8f0; min-width: 168px; }
+      .panelHead { padding: 7px 10px; cursor: pointer; user-select: none; color: #8da2d8;
+                   border-bottom: 1px solid #2a3252; letter-spacing: .04em; }
+      .panel.collapsed .panelBody { display: none; }
+      .panel.collapsed .panelHead { border-bottom: none; }
+      #objects { right: 12px; display: none; }
+      #layers { left: 8px; }
+      #layersBody { padding: 6px 10px 9px; }
+      #layersBody label { display: flex; align-items: center; gap: 7px; color: #b7c4e6;
+                          padding: 3px 0; white-space: nowrap; cursor: pointer; }
+      #layersBody label.subhead { color: #6b78a0; letter-spacing: .04em; margin-top: 5px;
+                                  padding-top: 6px; border-top: 1px solid #2a3252; cursor: default; }
+      #layersBody select { font: 12px monospace; padding: 3px 8px; margin-left: auto; }
       .objRow { display: flex; align-items: center; gap: 8px; padding: 4px 8px; cursor: pointer; }
       .objRow:hover { background: rgba(90,120,200,0.12); }
       .objSwatch { width: 11px; height: 11px; border-radius: 2px; flex: none; }
@@ -46,7 +53,26 @@
     <div id="clock"></div>
     <div id="pick"></div>
     <div id="timeMarks"></div>
-    <div id="objects"><div id="objectsHead">&#9662; mission objects</div><div id="objectsBody"></div></div>
+    <div id="objects" class="panel"><div id="objectsHead" class="panelHead">&#9662; mission objects</div><div id="objectsBody" class="panelBody"></div></div>
+    <div id="layers" class="panel"><div id="layersHead" class="panelHead">&#9662; layers</div>
+      <div id="layersBody" class="panelBody">
+        <label><input id="map2d" type="checkbox" /> 2D map</label>
+        <label><input id="ecef" type="checkbox" /> earth-fixed</label>
+        <label>tracks
+          <select id="trackmode">
+            <option value="none" selected>none</option>
+            <option value="orbit">orbit &plusmn;1</option>
+            <option value="ground">ground</option>
+          </select>
+        </label>
+        <label class="subhead">overlays</label>
+        <label><input id="stations" type="checkbox" /> stations + access</label>
+        <label><input id="footprints" type="checkbox" /> footprints</label>
+        <label><input id="coverage" type="checkbox" /> coverage</label>
+        <label><input id="labels" type="checkbox" /> labels</label>
+        <label><input id="heading" type="checkbox" /> heading</label>
+      </div>
+    </div>
     <div id="labelLayer"></div>
     <canvas id="scene"></canvas>
     <div id="bar">
@@ -56,20 +82,6 @@
         <option value="600" selected>600x</option>
         <option value="6000">6000x</option>
       </select>
-      <label><input id="ecef" type="checkbox" /> earth-fixed</label>
-      <label>tracks
-        <select id="trackmode">
-          <option value="none" selected>none</option>
-          <option value="orbit">orbit &plusmn;1</option>
-          <option value="ground">ground</option>
-        </select>
-      </label>
-      <label><input id="stations" type="checkbox" /> stations</label>
-      <label><input id="footprints" type="checkbox" /> footprints</label>
-      <label><input id="coverage" type="checkbox" /> coverage</label>
-      <label><input id="labels" type="checkbox" /> labels</label>
-      <label><input id="map2d" type="checkbox" /> 2D</label>
-      <label><input id="heading" type="checkbox" /> heading</label>
       <label for="time">timeline (7 days) &#8594;</label>
       <input id="time" type="range" min="0" max="10079" value="0" step="1" />
     </div>
