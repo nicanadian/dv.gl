@@ -109,6 +109,7 @@ export class EphemerisSource implements PropagationSource {
     samples: number,
     out: Float32Array,
     ecefEpochMs?: number,
+    periodsOut?: Float32Array,
   ): void {
     const n = this.entries.length;
     if (out.length < n * samples * 3) {
@@ -122,6 +123,7 @@ export class EphemerisSource implements PropagationSource {
       e.track.sampleInto(Math.min(Math.max(centerSec, e.startSec), e.endSec), this.scratch);
       const r = Math.hypot(this.scratch[0] ?? 0, this.scratch[1] ?? 0, this.scratch[2] ?? 0);
       const periodSec = 2 * Math.PI * Math.sqrt((r * r * r) / MU_EARTH);
+      if (periodsOut !== undefined) periodsOut[k] = periodSec / 60;
       for (let s = 0; s < samples; s += 1) {
         const frac = (s / (samples - 1)) * 2 - 1;
         const tSec = Math.min(Math.max(centerSec + frac * periodSec, e.startSec), e.endSec);

@@ -55,10 +55,17 @@ self.onmessage = (e: MessageEvent<InMsg>) => {
   if (msg.type === "sampleWindow") {
     if (source === undefined) throw new Error("worker: sampleWindow before init");
     const window = new Float32Array(source.count * msg.samples * 3);
-    source.sampleWindowInto(msg.centerMinutes, msg.samples, window, msg.ecefEpochMs);
+    const periods = new Float32Array(source.count);
+    source.sampleWindowInto(msg.centerMinutes, msg.samples, window, msg.ecefEpochMs, periods);
     self.postMessage(
-      { type: "window", centerMinutes: msg.centerMinutes, samples: msg.samples, window },
-      { transfer: [window.buffer] },
+      {
+        type: "window",
+        centerMinutes: msg.centerMinutes,
+        samples: msg.samples,
+        window,
+        periods,
+      },
+      { transfer: [window.buffer, periods.buffer] },
     );
     return;
   }

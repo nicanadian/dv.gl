@@ -237,14 +237,15 @@ async function main(): Promise<void> {
     ecefBox.addEventListener("change", () => {
       lastWindowCenterMin = Number.NEGATIVE_INFINITY;
     });
-    source.onWindow = (windowKm, _centerMinutes, samples) => {
+    source.onWindow = (windowKm, centerMinutes, samples, periodsMinutes) => {
       tracks ??= new OrbitTrackRenderer(device, {
         capacity: source.count,
         samples,
         format,
         depthFormat,
       });
-      tracks.setWindow(windowKm, source.count);
+      tracks.setWindow(windowKm, source.count, periodsMinutes);
+      lastWindowCenterMin = centerMinutes; // the split offset is measured from HERE
     };
 
     let lastT = performance.now();
@@ -288,7 +289,12 @@ async function main(): Promise<void> {
       earth.updateCamera(viewProjRte, eye, gmstRad);
       renderer?.updateCamera(viewProjRte, eye, canvas.width, canvas.height);
       if (tracksBox.checked)
-        tracks?.updateCamera(viewProjRte, eye, ecefBox.checked ? gmstRad : 0);
+        tracks?.updateCamera(
+          viewProjRte,
+          eye,
+          ecefBox.checked ? gmstRad : 0,
+          clock.currentSeconds / 60 - lastWindowCenterMin, // continuous now-split
+        );
 
       const encoder = device.createCommandEncoder();
       const pass = encoder.beginRenderPass({

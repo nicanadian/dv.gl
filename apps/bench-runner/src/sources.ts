@@ -55,7 +55,12 @@ export interface AsyncSource {
    * Latest request wins; delivery via onWindow.
    */
   requestWindow?(centerMinutes: number, samples: number, ecefEpochMs?: number): void;
-  onWindow?: (windowKm: Float32Array, centerMinutes: number, samples: number) => void;
+  onWindow?: (
+    windowKm: Float32Array,
+    centerMinutes: number,
+    samples: number,
+    periodsMinutes: Float32Array,
+  ) => void;
   dispose(): void;
 }
 
@@ -63,15 +68,22 @@ export interface AsyncSource {
 function syncWindow(
   api: AsyncSource,
   inner: {
-    sampleWindowInto?(c: number, s: number, out: Float32Array, ecefEpochMs?: number): void;
+    sampleWindowInto?(
+      c: number,
+      s: number,
+      out: Float32Array,
+      ecefEpochMs?: number,
+      periodsOut?: Float32Array,
+    ): void;
     count: number;
   },
 ): ((centerMinutes: number, samples: number, ecefEpochMs?: number) => void) | undefined {
   if (!inner.sampleWindowInto) return undefined;
   return (centerMinutes: number, samples: number, ecefEpochMs?: number): void => {
     const window = new Float32Array(inner.count * samples * 3);
-    inner.sampleWindowInto?.(centerMinutes, samples, window, ecefEpochMs);
-    api.onWindow?.(window, centerMinutes, samples);
+    const periods = new Float32Array(inner.count);
+    inner.sampleWindowInto?.(centerMinutes, samples, window, ecefEpochMs, periods);
+    api.onWindow?.(window, centerMinutes, samples, periods);
   };
 }
 
@@ -240,10 +252,11 @@ async function makeWorkerSource(catalogText: string, multiplier: number): Promis
       centerMinutes: number;
       samples: number;
       window: Float32Array;
+      periods: Float32Array;
     };
     if (msg.type === "window") {
       windowInFlight = false;
-      api.onWindow?.(msg.window, msg.centerMinutes, msg.samples);
+      api.onWindow?.(msg.window, msg.centerMinutes, msg.samples, msg.periods);
       if (windowPending !== undefined) {
         const next = windowPending;
         windowPending = undefined;

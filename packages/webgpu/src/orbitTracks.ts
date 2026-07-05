@@ -33,19 +33,25 @@ struct Camera {
   viewProjRte : mat4x4<f32>,
   eyeHigh     : vec4<f32>,
   eyeLow      : vec4<f32>,
-  // samples, count, gmstNow (rad; 0 for inertial-frame data), unused
+  // samples, count, gmstNow (rad; 0 for inertial-frame data), nowOffsetMinutes
   params      : vec4<f32>,
 };
 
 @group(0) @binding(0) var<uniform> cam : Camera;
 @group(0) @binding(1) var<storage, read> posHigh : array<vec4<f32>>;
 @group(0) @binding(2) var<storage, read> posLow  : array<vec4<f32>>;
+@group(0) @binding(3) var<storage, read> periodsMin : array<f32>;
 
 struct VsOut {
   @builtin(position) clip : vec4<f32>,
   @location(0) alpha : f32,
   @location(1) future : f32,
 };
+
+// pass selector: 0 = draw only future fragments, 1 = draw only past fragments
+// (past drawn second so it wins where the revs overlap in space)
+struct PassSel { sel : vec4<f32> };
+@group(1) @binding(0) var<uniform> passSel : PassSel;
 
 @vertex
 fn vs(@builtin(vertex_index) s : u32, @builtin(instance_index) i : u32) -> VsOut {
@@ -63,15 +69,22 @@ fn vs(@builtin(vertex_index) s : u32, @builtin(instance_index) i : u32) -> VsOut
   out.clip = cam.viewProjRte * vec4<f32>(rel, 1.0);
 
   // no fades, no dashes: a track is a precise line. past rev and next rev are
-  // both solid; they differ by COLOR only.
+  // both solid; they differ by COLOR only. The split sits at "now" CONTINUOUSLY:
+  // the window spans +/- one period of THIS object around the window center, so
+  // the sample index of "now" advances with the clock between geometry refreshes
+  // and the satellite always rides the color boundary.
   let mid = f32(samples - 1u) * 0.5;
+  let nowIdx = mid * (1.0 + cam.params.w / max(periodsMin[i], 1e-6));
   out.alpha = 0.9;
-  out.future = select(0.0, 1.0, f32(s) > mid);
+  out.future = select(0.0, 1.0, f32(s) > nowIdx);
   return out;
 }
 
 @fragment
 fn fs(in : VsOut) -> @location(0) vec4<f32> {
+  // two passes: future-only then past-only, so the solid past orbit wins overlap
+  if (passSel.sel.x < 0.5 && in.future < 0.5) { discard; }
+  if (passSel.sel.x >= 0.5 && in.future >= 0.5) { discard; }
   // past rev: catalog cyan. next rev: amber. both solid.
   let past = vec3<f32>(0.55, 0.80, 1.00);
   let fut  = vec3<f32>(1.00, 0.72, 0.30);
@@ -95,10 +108,14 @@ export class OrbitTrackRenderer {
   private readonly cameraBuf: GPUBuffer;
   private readonly highBuf: GPUBuffer;
   private readonly lowBuf: GPUBuffer;
+  private readonly periodsBuf: GPUBuffer;
+  private readonly passSelBufs: [GPUBuffer, GPUBuffer];
+  private readonly passSelGroups: [GPUBindGroup, GPUBindGroup];
   readonly capacity: number;
   readonly samples: number;
   private readonly highStage: Float32Array<ArrayBuffer>;
   private readonly lowStage: Float32Array<ArrayBuffer>;
+  private readonly periodsStage: Float32Array<ArrayBuffer>;
   private readonly cameraStage = new Float32Array(16 + 4 + 4 + 4);
   private count = 0;
 
@@ -110,6 +127,7 @@ export class OrbitTrackRenderer {
     if (this.samples % 2 === 0) throw new Error("samples must be odd (middle = now)");
     this.highStage = new Float32Array(opts.capacity * this.samples * 4);
     this.lowStage = new Float32Array(opts.capacity * this.samples * 4);
+    this.periodsStage = new Float32Array(opts.capacity);
 
     const module = device.createShaderModule({ code: ORBIT_TRACKS_WGSL });
     this.pipeline = device.createRenderPipeline({
@@ -153,23 +171,49 @@ export class OrbitTrackRenderer {
       size: this.cameraStage.byteLength,
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
+    this.periodsBuf = device.createBuffer({
+      size: Math.max(opts.capacity, 1) * 4,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+    });
     this.bindGroup = device.createBindGroup({
       layout: this.pipeline.getBindGroupLayout(0),
       entries: [
         { binding: 0, resource: { buffer: this.cameraBuf } },
         { binding: 1, resource: { buffer: this.highBuf } },
         { binding: 2, resource: { buffer: this.lowBuf } },
+        { binding: 3, resource: { buffer: this.periodsBuf } },
       ],
     });
+    const mkSel = (v: number): GPUBuffer => {
+      const buf = device.createBuffer({
+        size: 16,
+        usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+      });
+      device.queue.writeBuffer(buf, 0, new Float32Array([v, 0, 0, 0]));
+      return buf;
+    };
+    this.passSelBufs = [mkSel(0), mkSel(1)];
+    this.passSelGroups = [
+      device.createBindGroup({
+        layout: this.pipeline.getBindGroupLayout(1),
+        entries: [{ binding: 0, resource: { buffer: this.passSelBufs[0] } }],
+      }),
+      device.createBindGroup({
+        layout: this.pipeline.getBindGroupLayout(1),
+        entries: [{ binding: 0, resource: { buffer: this.passSelBufs[1] } }],
+      }),
+    ];
   }
 
-  /** Upload a full window: [object][sample][xyz] km, from sampleWindowInto. */
-  setWindow(windowKm: Float32Array, count: number): void {
+  /** Upload a full window: [object][sample][xyz] km + per-object periods (min). */
+  setWindow(windowKm: Float32Array, count: number, periodsMinutes: Float32Array): void {
     const n = Math.min(count, this.capacity);
     this.count = n;
     const packed = packSplit3To4(windowKm, n * this.samples, this.highStage, this.lowStage);
     this.device.queue.writeBuffer(this.highBuf, 0, this.highStage, 0, packed * 4);
     this.device.queue.writeBuffer(this.lowBuf, 0, this.lowStage, 0, packed * 4);
+    this.periodsStage.set(periodsMinutes.subarray(0, n));
+    this.device.queue.writeBuffer(this.periodsBuf, 0, this.periodsStage, 0, n);
   }
 
   clear(): void {
@@ -180,6 +224,7 @@ export class OrbitTrackRenderer {
     viewProjRte: Float32Array,
     eyeKm: readonly [number, number, number],
     gmstNowRad = 0,
+    nowOffsetMinutes = 0,
   ): void {
     this.cameraStage.set(viewProjRte, 0);
     for (let i = 0; i < 3; i += 1) {
@@ -191,6 +236,7 @@ export class OrbitTrackRenderer {
     this.cameraStage[24] = this.samples;
     this.cameraStage[25] = this.count;
     this.cameraStage[26] = gmstNowRad;
+    this.cameraStage[27] = nowOffsetMinutes;
     this.device.queue.writeBuffer(this.cameraBuf, 0, this.cameraStage);
   }
 
@@ -199,11 +245,13 @@ export class OrbitTrackRenderer {
     pass.setPipeline(this.pipeline);
     pass.setBindGroup(0, this.bindGroup);
     // Near-circular orbits overlap themselves: past rev and next rev share the
-    // same ring in space. Draw the future half FIRST and the past half ON TOP,
-    // so the solid past orbit always reads, and amber shows exactly where the
-    // next rev genuinely deviates from it.
-    const half = (this.samples - 1) / 2;
-    pass.draw(this.samples - half, this.count, half); // future: mid..end
-    pass.draw(half + 1, this.count, 0); // past: start..mid, on top
+    // same ring in space. The now-split is per-object and continuous, so the
+    // halves are selected in the FRAGMENT stage: future-only pass first, then
+    // past-only on top -- the solid past orbit always reads, amber shows where
+    // the next rev genuinely deviates.
+    pass.setBindGroup(1, this.passSelGroups[0]);
+    pass.draw(this.samples, this.count);
+    pass.setBindGroup(1, this.passSelGroups[1]);
+    pass.draw(this.samples, this.count);
   }
 }
