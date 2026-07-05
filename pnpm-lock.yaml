@@ -26,6 +26,9 @@ importers:
       '@dvgl/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@dvgl/czml':
+        specifier: workspace:*
+        version: link:../../packages/czml
       '@dvgl/frames':
         specifier: workspace:*
         version: link:../../packages/frames

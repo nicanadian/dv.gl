@@ -12,6 +12,7 @@
   "dependencies": {
     "@dvgl/benchmarks": "workspace:*",
     "@dvgl/core": "workspace:*",
+    "@dvgl/czml": "workspace:*",
     "@dvgl/frames": "workspace:*",
     "@dvgl/orbits": "workspace:*",
     "@dvgl/validate": "workspace:*",

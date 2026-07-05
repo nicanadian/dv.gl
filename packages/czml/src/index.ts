@@ -14,14 +14,4 @@
  * limitations under the License.
  */
 
-/** The strict CZML subset dv.gl will parse and export (pre-alpha placeholder). */
-export const CZML_SUBSET = [
-  "document",
-  "clock",
-  "position",
-  "orientation",
-  "point",
-  "path",
-  "availability",
-] as const;
-export type CzmlSubsetProperty = (typeof CZML_SUBSET)[number];
+export * from "./czml.js";

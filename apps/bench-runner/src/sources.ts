@@ -27,6 +27,7 @@
  * deliver results via onResult(positions, minutes, failed).
  */
 import * as satellite from "satellite.js";
+import { czmlToSegments, parseCzml } from "@dvgl/czml";
 import {
   catalogEpochMs,
   EphemerisSource,
@@ -36,7 +37,7 @@ import {
   SatelliteJsSource,
 } from "@dvgl/orbits";
 
-export type SourceMode = "main" | "worker" | "sgp4gl" | "oem";
+export type SourceMode = "main" | "worker" | "sgp4gl" | "oem" | "czml";
 
 export interface AsyncSource {
   readonly label: string;
@@ -69,9 +70,12 @@ export async function loadCatalogText(): Promise<{
 /** Read benchmark variant knobs from the page URL. */
 export function readVariant(): { mode: SourceMode; multiplier: number } {
   const params = new URLSearchParams(location.search);
-  const rawMode = params.get("prop") ?? (params.get("src") === "oem" ? "oem" : "worker");
+  const src = params.get("src");
+  const rawMode = params.get("prop") ?? (src === "oem" || src === "czml" ? src : "worker");
   const mode: SourceMode =
-    rawMode === "main" || rawMode === "sgp4gl" || rawMode === "oem" ? rawMode : "worker";
+    rawMode === "main" || rawMode === "sgp4gl" || rawMode === "oem" || rawMode === "czml"
+      ? rawMode
+      : "worker";
   const multiplier = Math.max(1, Math.min(64, Number(params.get("x") ?? "1") || 1));
   return { mode, multiplier };
 }
@@ -84,6 +88,7 @@ export async function makeSource(
   if (mode === "main") return makeMainSource(catalogText, multiplier);
   if (mode === "worker") return await makeWorkerSource(catalogText, multiplier);
   if (mode === "oem") return await makeOemSource();
+  if (mode === "czml") return await makeCzmlSource();
   return await makeSgp4GlSource(catalogText, multiplier);
 }
 
@@ -99,6 +104,30 @@ async function makeOemSource(): Promise<AsyncSource> {
   const positions = new Float32Array(inner.count * 3);
   const api: AsyncSource = {
     label: `OEM ephemeris (${file.originator}, ${inner.count} objects)`,
+    count: inner.count,
+    rejected: inner.rejected.length,
+    epochMs: inner.epochMs,
+    windowSeconds: inner.windowSeconds,
+    request(minutes: number): void {
+      const { failed } = inner.propagateInto(minutes, positions);
+      api.onResult?.(positions, minutes, failed);
+    },
+    dispose(): void {},
+  };
+  return api;
+}
+
+async function makeCzmlSource(): Promise<AsyncSource> {
+  const url = new URLSearchParams(location.search).get("url") ?? "./mission.czml";
+  let resp = await fetch(url);
+  if (!resp.ok && url === "./mission.czml") resp = await fetch("./mission.sample.czml");
+  if (!resp.ok) throw new Error(`CZML fetch failed (${resp.status}): ${url}`);
+  const scene = parseCzml(await resp.text());
+  for (const w of scene.warnings) console.warn(`czml: ${w}`);
+  const inner = new EphemerisSource(czmlToSegments(scene));
+  const positions = new Float32Array(inner.count * 3);
+  const api: AsyncSource = {
+    label: `CZML (${scene.name}, ${inner.count} entities)`,
     count: inner.count,
     rejected: inner.rejected.length,
     epochMs: inner.epochMs,

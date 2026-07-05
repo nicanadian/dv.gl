@@ -145,6 +145,12 @@ async function main(): Promise<void> {
     (document.getElementById("time") as HTMLInputElement).max = String(
       Math.floor(windowSeconds / 60) - 1,
     );
+    const timeLabel = document.querySelector('label[for="time"]');
+    if (timeLabel) {
+      const hours = windowSeconds / 3600;
+      timeLabel.textContent =
+        hours >= 48 ? `timeline (${Math.round(hours / 24)} days) \u2192` : `timeline (${Math.round(hours)} h) \u2192`;
+    }
     clock.play();
     let dirty = true;
 
