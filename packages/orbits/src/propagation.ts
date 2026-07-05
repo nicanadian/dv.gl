@@ -51,6 +51,19 @@ interface Rec {
   readonly epochOffsetMinutes: number;
 }
 
+export interface SourceOptions {
+  /**
+   * Workload multiplier: each valid object is instantiated `replicate` times, with
+   * replica k phase-shifted by k * `replicaPhaseMinutes` along its own orbit. The
+   * replicas are physically plausible distinct objects (same elements, different
+   * phase), so a 16k catalog scales to a 64k/160k stress workload without a bigger
+   * snapshot. Default 1 (no replication).
+   */
+  readonly replicate?: number;
+  /** Phase step between replicas, minutes. Default 17 (co-prime-ish with periods). */
+  readonly replicaPhaseMinutes?: number;
+}
+
 /**
  * CPU SGP4 source backed by satellite.js (fp64 Vallado). Invalid TLEs are dropped at
  * init and reported, never silently propagated.
@@ -59,7 +72,13 @@ export class SatelliteJsSource implements PropagationSource {
   private readonly recs: Rec[] = [];
   readonly rejected: { readonly name: string; readonly reason: string }[] = [];
 
-  constructor(objects: readonly CatalogObject[], scenarioEpochMs?: number) {
+  constructor(
+    objects: readonly CatalogObject[],
+    scenarioEpochMs?: number,
+    options?: SourceOptions,
+  ) {
+    const replicate = Math.max(1, Math.floor(options?.replicate ?? 1));
+    const phase = options?.replicaPhaseMinutes ?? 17;
     for (const o of objects) {
       let satrec: SatRec;
       try {
@@ -86,7 +105,9 @@ export class SatelliteJsSource implements PropagationSource {
         const tleEpochMs = jdayToUnixMs(satrec.jdsatepoch);
         epochOffsetMinutes = (scenarioEpochMs - tleEpochMs) / 60_000;
       }
-      this.recs.push({ satrec, epochOffsetMinutes });
+      for (let r = 0; r < replicate; r += 1) {
+        this.recs.push({ satrec, epochOffsetMinutes: epochOffsetMinutes + r * phase });
+      }
     }
   }
 

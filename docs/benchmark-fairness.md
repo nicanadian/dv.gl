@@ -106,6 +106,16 @@ Dated changes made before any results were published:
   disabled on both paths (Cesium `globe.show = false`; clean-sheet renders points
   only). A globe-on variant can be added later under the identical-ellipsoid rule.
 
+- **2026-07-04 (pre-results), source modes and workload multiplier:** the runner
+  gained `?prop=main|worker|sgp4gl` (satellite.js on the main thread, satellite.js
+  in a Web Worker — the new default — or sgp4.gl WASM+GPU, pinned 0.1.5-beta) and
+  `?x=N` (each object instantiated N times, phase-shifted 17 min per replica along
+  its own orbit, so a 16k snapshot scales to a physically plausible 64k/160k
+  workload). Both knobs apply identically to both paths; results name the variant
+  (e.g. `stage0-50k-7day-x4` + source label). Scrub-to-frame now closes only when a
+  presented frame renders positions evaluated at the scrubbed time — stale frames
+  from an async source do not close the interval.
+
 ## Publication
 
 The harness, scenario definition, catalog checksum, pinned dependency commits, raw

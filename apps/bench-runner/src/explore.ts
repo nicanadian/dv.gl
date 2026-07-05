@@ -20,7 +20,7 @@
  * no metrics, input is yours. This is the seed of the actual product demo.
  */
 import { PointRenderer } from "@dvgl/webgpu";
-import { loadSharedWorkload } from "./runner.js";
+import { loadCatalogText, makeSource, readVariant } from "./sources.js";
 
 // ---- minimal mat4 (same as cleansheet) ----
 
@@ -115,14 +115,32 @@ async function main(): Promise<void> {
     context.configure({ device, format, alphaMode: "opaque" });
 
     say("loading catalog...");
-    const { source, positions } = await loadSharedWorkload();
-    const renderer = new PointRenderer(device, { capacity: 60_000, format });
+    const { mode, multiplier } = readVariant();
+    const catalog = await loadCatalogText();
+    const source = await makeSource(mode, catalog.text, multiplier);
+    let renderer: PointRenderer | undefined;
 
     const view: View = { lonDeg: -75, latDeg: 25, rangeKm: 45_000 };
     let sceneMinutes = 0;
     let playing = true;
     let speed = 60; // scene-seconds per wall-second
     let dirty = true;
+
+    // async propagation: latest-wins coalescing lives in the source; the render
+    // loop never blocks on evaluation, which is why scrubbing stays smooth
+    const clockEl = document.getElementById("clock");
+    source.onResult = (positions, minutes, failed) => {
+      renderer ??= new PointRenderer(device, { capacity: source.count, format });
+      renderer.updatePositions(positions, source.count);
+      const d = Math.floor(minutes / 1440);
+      const h = Math.floor((minutes % 1440) / 60);
+      const m = Math.floor(minutes % 60);
+      if (clockEl) {
+        clockEl.textContent =
+          `T+${d}d ${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")} ` +
+          `-- ${source.count - failed}/${source.count} objects [${mode}${multiplier > 1 ? ` x${multiplier}` : ""}]`;
+      }
+    };
 
     // mouse orbit + wheel zoom
     let dragging = false;
@@ -157,7 +175,6 @@ async function main(): Promise<void> {
     const slider = document.getElementById("time") as HTMLInputElement;
     const playBtn = document.getElementById("play") as HTMLButtonElement;
     const speedSel = document.getElementById("speed") as HTMLSelectElement;
-    const clock = document.getElementById("clock");
     slider.addEventListener("input", () => {
       sceneMinutes = Number(slider.value);
       playing = false;
@@ -184,22 +201,13 @@ async function main(): Promise<void> {
         dirty = true;
       }
       if (dirty) {
-        const { failed } = source.propagateInto(sceneMinutes, positions);
-        renderer.updatePositions(positions, source.count);
+        source.request(sceneMinutes);
         dirty = false;
-        const d = Math.floor(sceneMinutes / 1440);
-        const h = Math.floor((sceneMinutes % 1440) / 60);
-        const m = Math.floor(sceneMinutes % 60);
-        if (clock) {
-          clock.textContent =
-            `T+${d}d ${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")} ` +
-            `-- ${source.count - failed}/${source.count} objects`;
-        }
       }
 
       const eye = eyeFrom(view);
       const proj = perspective((50 * Math.PI) / 180, canvas.width / canvas.height, 10, 500_000);
-      renderer.updateCamera(mul(proj, lookAtRte(eye)), eye, canvas.width, canvas.height);
+      renderer?.updateCamera(mul(proj, lookAtRte(eye)), eye, canvas.width, canvas.height);
 
       const encoder = device.createCommandEncoder();
       const pass = encoder.beginRenderPass({
@@ -212,7 +220,7 @@ async function main(): Promise<void> {
           },
         ],
       });
-      renderer.draw(pass);
+      renderer?.draw(pass);
       pass.end();
       device.queue.submit([encoder.finish()]);
       requestAnimationFrame(tick);

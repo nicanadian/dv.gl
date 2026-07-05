@@ -13,7 +13,9 @@
     "@dvgl/benchmarks": "workspace:*",
     "@dvgl/orbits": "workspace:*",
     "@dvgl/webgpu": "workspace:*",
-    "cesium": "1.143.0"
+    "cesium": "1.143.0",
+    "sgp4.gl": "0.1.5-beta",
+    "satellite.js": "^5.0.0"
   },
   "devDependencies": {
     "@webgpu/types": "^0.1.44",

@@ -109,13 +109,15 @@ async function makeCleanSheetPath(): Promise<RenderPath> {
   const format = navigator.gpu.getPreferredCanvasFormat();
   context.configure({ device, format, alphaMode: "opaque" });
 
-  const renderer = new PointRenderer(device, { capacity: 60_000, format });
+  let renderer: PointRenderer | undefined;
   let eye: [number, number, number] = [45_000, 0, 0];
 
   return {
     name: "cleansheet-webgpu",
     primitive: "@dvgl/webgpu PointRenderer (instanced quads, RTE, 1 draw call)",
     updatePositions(positionsKm: Float32Array, count: number): void {
+      // lazy: capacity comes from the actual workload (multiplier-aware)
+      renderer ??= new PointRenderer(device, { capacity: count, format });
       renderer.updatePositions(positionsKm, count);
     },
     setCamera(cam): void {
@@ -127,7 +129,7 @@ async function makeCleanSheetPath(): Promise<RenderPath> {
         500_000, // km
       );
       const viewProjRte = mul(proj, lookAtRte(eye));
-      renderer.updateCamera(viewProjRte, eye, canvas.width, canvas.height);
+      renderer?.updateCamera(viewProjRte, eye, canvas.width, canvas.height);
     },
     renderFrame(): void {
       const encoder = device.createCommandEncoder();
@@ -141,7 +143,7 @@ async function makeCleanSheetPath(): Promise<RenderPath> {
           },
         ],
       });
-      renderer.draw(pass);
+      renderer?.draw(pass);
       pass.end();
       device.queue.submit([encoder.finish()]);
     },

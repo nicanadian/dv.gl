@@ -19,6 +19,14 @@
  * catalog load, the shared propagation source, the scripted camera/scrub timeline,
  * metric collection, results download -- is identical by construction, which is the
  * point (docs/benchmark-fairness.md).
+ *
+ * Variant knobs (identical on both paths for a valid comparison):
+ *   ?prop=main|worker|sgp4gl  propagation source (default worker)
+ *   ?x=N                      catalog multiplier via phase-shifted replicas
+ *
+ * Scrub-to-frame semantics: a scrub closes when a frame is presented that renders
+ * positions evaluated AT the scrubbed scene time -- not merely the next frame. With
+ * an async source, frames rendered from stale buffers do not close the interval.
  */
 import {
   cameraAt,
@@ -26,7 +34,7 @@ import {
   ScrubLatencyProbe,
   stage0Scenario,
 } from "@dvgl/benchmarks";
-import { catalogEpochMs, parseCatalog, SatelliteJsSource } from "@dvgl/orbits";
+import { loadCatalogText, makeSource, readVariant } from "./sources.js";
 
 export interface CameraState {
   readonly rangeKm: number;
@@ -42,7 +50,7 @@ export interface RenderPath {
   /** Consume freshly propagated positions (km TEME, stride 3, NaN = failed). */
   updatePositions(positionsKm: Float32Array, count: number): void;
   setCamera(cam: CameraState): void;
-  /** Render one frame; resolve when the frame has been submitted. */
+  /** Render one frame; returns after submission. */
   renderFrame(): void;
 }
 
@@ -50,11 +58,11 @@ export interface RunResult {
   readonly path: string;
   readonly primitive: string;
   readonly scenario: string;
+  readonly variant: { readonly propagation: string; readonly multiplier: number };
   readonly catalogSource: string;
   readonly catalogSha256: string;
   readonly objectCount: number;
   readonly rejectedCount: number;
-  readonly propagationSource: string;
   readonly frame: ReturnType<FrameTimeRecorder["stats"]>;
   readonly scrubLatenciesMs: readonly number[];
   readonly scrubP95Ms: number;
@@ -64,66 +72,45 @@ export interface RunResult {
 
 const MEASUREMENT_SECONDS = 60;
 
-export async function loadSharedWorkload(): Promise<{
-  source: SatelliteJsSource;
-  positions: Float32Array;
-  catalogSource: string;
-  catalogSha256: string;
-}> {
-  // real snapshot (gitignored, via scripts/fetch-catalog.mjs) or the committed sample
-  let resp = await fetch("./catalog.json");
-  if (!resp.ok) resp = await fetch("./catalog.sample.json");
-  if (!resp.ok) {
-    throw new Error(`no catalog found (${resp.status}): run scripts/fetch-catalog.mjs`);
-  }
-  const catalog = parseCatalog(await resp.text());
-  const epochMs = catalogEpochMs(catalog.objects);
-  const source = new SatelliteJsSource(catalog.objects, epochMs);
-  if (source.rejected.length > 0) {
-    console.warn(`catalog: rejected ${source.rejected.length} invalid TLEs`);
-  }
-  return {
-    source,
-    positions: new Float32Array(source.count * 3),
-    catalogSource: catalog.source,
-    catalogSha256: catalog.sha256,
-  };
-}
-
 /** Run the scripted Stage 0 measurement against one path. Returns the result. */
 export async function runScenario(path: RenderPath): Promise<RunResult> {
-  const { source, positions, catalogSource, catalogSha256 } =
-    await loadSharedWorkload();
+  const { mode, multiplier } = readVariant();
+  const catalog = await loadCatalogText();
+  const source = await makeSource(mode, catalog.text, multiplier);
   const scenario = stage0Scenario;
   const recorder = new FrameTimeRecorder();
   const probe = new ScrubLatencyProbe();
 
-  let sceneMinutes = 0; // scene time within the 7-day window, minutes from epoch
+  let sceneMinutes = 0;
   let scrubIdx = 0;
-  const t0 = performance.now();
+  let renderedMinutes = Number.NaN; // scene time of the buffer the path last consumed
+  let freshForFrame = false;
 
-  const propagateAndPush = (): void => {
-    source.propagateInto(sceneMinutes, positions);
+  source.onResult = (positions, minutes) => {
     path.updatePositions(positions, source.count);
+    renderedMinutes = minutes;
+    freshForFrame = true;
   };
-  propagateAndPush();
 
+  // first evaluation before the clock starts
+  source.request(0);
+  await waitFor(() => Number.isFinite(renderedMinutes));
+
+  const t0 = performance.now();
   return await new Promise<RunResult>((resolve) => {
     const tick = (): void => {
       const now = performance.now();
       const tSec = (now - t0) / 1000;
 
       // scripted scrubs: apply every event whose time has come
-      let scrubbed = false;
       while (scrubIdx < scenario.scrubs.length) {
         const ev = scenario.scrubs[scrubIdx];
         if (ev === undefined || ev.tSeconds > tSec) break;
         sceneMinutes = (ev.windowFraction * scenario.windowSeconds) / 60;
         probe.scrubInput(now);
-        scrubbed = true;
+        source.request(sceneMinutes);
         scrubIdx += 1;
       }
-      if (scrubbed) propagateAndPush();
 
       const kf = cameraAt(scenario, tSec);
       path.setCamera({
@@ -135,20 +122,25 @@ export async function runScenario(path: RenderPath): Promise<RunResult> {
 
       const after = performance.now();
       recorder.frame(after);
-      probe.framePresented(after);
+      // close pending scrubs only when this frame showed the scrubbed time
+      if (freshForFrame && renderedMinutes === sceneMinutes) {
+        probe.framePresented(after);
+      }
+      freshForFrame = false;
 
       if (tSec < MEASUREMENT_SECONDS) {
         requestAnimationFrame(tick);
       } else {
+        source.dispose();
         resolve({
           path: path.name,
           primitive: path.primitive,
-          scenario: scenario.name,
-          catalogSource,
-          catalogSha256,
+          scenario: `${scenario.name}${multiplier > 1 ? `-x${multiplier}` : ""}`,
+          variant: { propagation: source.label, multiplier },
+          catalogSource: catalog.source,
+          catalogSha256: catalog.sha256,
           objectCount: source.count,
-          rejectedCount: source.rejected.length,
-          propagationSource: "satellite.js CPU (shared, fp64) -- sgp4.gl planned",
+          rejectedCount: source.rejected,
           frame: recorder.stats(),
           scrubLatenciesMs: [...probe.samples()],
           scrubP95Ms: probe.p95Ms(),
@@ -161,9 +153,19 @@ export async function runScenario(path: RenderPath): Promise<RunResult> {
   });
 }
 
+function waitFor(cond: () => boolean): Promise<void> {
+  return new Promise((resolve) => {
+    const poll = (): void => {
+      if (cond()) resolve();
+      else setTimeout(poll, 10);
+    };
+    poll();
+  });
+}
+
 /** Download the result as JSON and print it, so nothing is lost either way. */
 export function publishResult(result: RunResult): void {
-  console.log("BENCH RESULT", result);
+  console.log("BENCH RESULT", JSON.stringify(result));
   const blob = new Blob([JSON.stringify(result, null, 2)], {
     type: "application/json",
   });
@@ -174,8 +176,8 @@ export function publishResult(result: RunResult): void {
   const el = document.getElementById("status");
   if (el) {
     el.textContent =
-      `${result.path}: p95 frame ${result.frame.p95Ms.toFixed(2)} ms, ` +
+      `${result.path} [${result.scenario}]: p95 frame ${result.frame.p95Ms.toFixed(2)} ms, ` +
       `p95 scrub-to-frame ${result.scrubP95Ms.toFixed(2)} ms ` +
-      `(${result.objectCount} objects)`;
+      `(${result.objectCount} objects, ${result.variant.propagation})`;
   }
 }

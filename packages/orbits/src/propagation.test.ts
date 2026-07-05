@@ -122,3 +122,34 @@ describe("readPosition (satellite.js failure shapes)", () => {
     expect(readPosition({ position: { x: 1, y: 2, z: 3 } })).toEqual({ x: 1, y: 2, z: 3 });
   });
 });
+
+describe("workload replication", () => {
+  const obj = { name: "LEO", line1: FIXTURE.line1, line2: FIXTURE.line2 };
+
+  it("replicate=N multiplies count with phase-shifted, distinct replicas", () => {
+    const source = new SatelliteJsSource([obj], undefined, { replicate: 4 });
+    expect(source.count).toBe(4);
+    const out = new Float32Array(12);
+    const { written, failed } = source.propagateInto(0, out);
+    expect(written).toBe(4);
+    expect(failed).toBe(0);
+    // replicas are phase-shifted along the orbit: positions must differ
+    const r0 = [out[0], out[1], out[2]];
+    const r1 = [out[3], out[4], out[5]];
+    const dist = Math.hypot(
+      (r0[0] ?? 0) - (r1[0] ?? 0),
+      (r0[1] ?? 0) - (r1[1] ?? 0),
+      (r0[2] ?? 0) - (r1[2] ?? 0),
+    );
+    expect(dist).toBeGreaterThan(100); // km apart, not co-located
+    // all replicas still on the same orbit: same radius to within eccentric wiggle
+    const rad0 = Math.hypot(r0[0] ?? 0, r0[1] ?? 0, r0[2] ?? 0);
+    const rad1 = Math.hypot(r1[0] ?? 0, r1[1] ?? 0, r1[2] ?? 0);
+    expect(Math.abs(rad0 - rad1)).toBeLessThan(50);
+  });
+
+  it("replicate=1 (default) is unchanged", () => {
+    expect(new SatelliteJsSource([obj]).count).toBe(1);
+    expect(new SatelliteJsSource([obj], undefined, {}).count).toBe(1);
+  });
+});

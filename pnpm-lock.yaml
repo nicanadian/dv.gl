@@ -32,6 +32,12 @@ importers:
       cesium:
         specifier: 1.143.0
         version: 1.143.0
+      satellite.js:
+        specifier: ^5.0.0
+        version: 5.0.0
+      sgp4.gl:
+        specifier: 0.1.5-beta
+        version: 0.1.5-beta
     devDependencies:
       '@webgpu/types':
         specifier: ^0.1.44
@@ -928,6 +934,9 @@ packages:
   satellite.js@5.0.0:
     resolution: {integrity: sha512-ie3yiJ2LJAJIhVUKdYhgp7V0btXKAMImDjRnuaNfJGl8rjwP2HwVIh4HLFcpiXYEiYwXc5fqh5+yZqCe6KIwWw==}
 
+  sgp4.gl@0.1.5-beta:
+    resolution: {integrity: sha512-V5VtWXW2EABp1/1M4XG3TYBpusIB3zYjrr9yEgxqcOHFqMlIG1+UCi3IbmsV/7eOZEGYj9vhhGdLW7DxPq4Ahg==}
+
   siginfo@2.0.0:
     resolution: {integrity: sha512-ybx0WO1/8bSBLEWXZvEd7gMW3Sn3JFlW3TvX1nREbDLRNQNaeNN8WK0meBwPdAaOI7TtRRRJn/Es1zhrrCHu7g==}
 
@@ -1777,6 +1786,8 @@ snapshots:
       fsevents: 2.3.3
 
   satellite.js@5.0.0: {}
+
+  sgp4.gl@0.1.5-beta: {}
 
   siginfo@2.0.0: {}
 
