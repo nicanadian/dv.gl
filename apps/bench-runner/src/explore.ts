@@ -813,16 +813,16 @@ async function main(): Promise<void> {
         const hint = accessBox.checked
           ? selected.has(hoveredIndex)
             ? " · click to unpin"
-            : " · click to pin access"
+            : " · click for field of regard"
           : "";
         pickEl.style.display = "block";
         pickEl.textContent = nameOf(hoveredIndex) + hint;
       } else if (accessBox.checked && selected.size > 0) {
         pickEl.style.display = "block";
-        pickEl.textContent = `access · ${[...selected].map(nameOf).join(", ")}`;
+        pickEl.textContent = `field of regard · ${[...selected].map(nameOf).join(", ")}`;
       } else if (accessBox.checked) {
         pickEl.style.display = "block";
-        pickEl.textContent = "access: click a satellite to show where it can steer";
+        pickEl.textContent = "field of regard: click a satellite to show where it can steer";
       } else {
         pickEl.style.display = "none";
       }
