@@ -13,6 +13,7 @@ export default defineConfig({
         composed: "composed.html",
         cleansheet: "cleansheet.html",
         explore: "explore.html",
+        numerics: "numerics.html",
       },
     },
     chunkSizeWarningLimit: 5000,

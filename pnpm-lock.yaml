@@ -26,6 +26,9 @@ importers:
       '@dvgl/orbits':
         specifier: workspace:*
         version: link:../../packages/orbits
+      '@dvgl/validate':
+        specifier: workspace:*
+        version: link:../../packages/validate
       '@dvgl/webgpu':
         specifier: workspace:*
         version: link:../../packages/webgpu

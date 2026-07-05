@@ -15,7 +15,8 @@
     "@dvgl/webgpu": "workspace:*",
     "cesium": "1.143.0",
     "sgp4.gl": "0.1.5-beta",
-    "satellite.js": "^5.0.0"
+    "satellite.js": "^5.0.0",
+    "@dvgl/validate": "workspace:*"
   },
   "devDependencies": {
     "@webgpu/types": "^0.1.44",
