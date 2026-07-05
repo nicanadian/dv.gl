@@ -15,7 +15,7 @@
  */
 import { describe, expect, it } from "vitest";
 import { buildEllipsoid, EARTH_A_KM, EARTH_B_KM } from "./earth.js";
-import { POINTS_WGSL } from "./points.js";
+import { decodePickedIndex, POINTS_WGSL } from "./points.js";
 import { combineSplit, packRte, packSplit3To4, splitCamera, splitDouble } from "./rte.js";
 import { nextTrailSlot, TRAILS_WGSL, trailSlotForAge } from "./trails.js";
 
@@ -170,5 +170,16 @@ describe("ellipsoid mesh", () => {
     const f = (x / EARTH_A_KM) ** 2 + (y / EARTH_A_KM) ** 2 + (z / EARTH_B_KM) ** 2;
     expect(f).toBeGreaterThan(1.001); // bumped off the surface
     expect(f).toBeLessThan(1.01);
+  });
+});
+
+describe("pick id encode/decode", () => {
+  it("round-trips an object index through RGBA8 and reserves 0 for background", () => {
+    for (const idx of [0, 1, 254, 255, 256, 4095, 63000]) {
+      const id = idx + 1;
+      const rgba = new Uint8Array([id & 255, (id >> 8) & 255, (id >> 16) & 255, 255]);
+      expect(decodePickedIndex(rgba)).toBe(idx);
+    }
+    expect(decodePickedIndex(new Uint8Array([0, 0, 0, 255]))).toBe(-1); // background
   });
 });

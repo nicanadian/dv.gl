@@ -21,7 +21,13 @@
  */
 import { MissionClock } from "@dvgl/core";
 import { ecefToSurface, gmst } from "@dvgl/frames";
-import { EarthRenderer, LineRenderer, OrbitTrackRenderer, PointRenderer } from "@dvgl/webgpu";
+import {
+  decodePickedIndex,
+  EarthRenderer,
+  LineRenderer,
+  OrbitTrackRenderer,
+  PointRenderer,
+} from "@dvgl/webgpu";
 import { catalogEpochMs, elevationDeg, parseCatalog, stationEcef } from "@dvgl/orbits";
 import { loadCatalogText, makeSource, readVariant } from "./sources.js";
 
@@ -123,6 +129,30 @@ async function main(): Promise<void> {
       usage: GPUTextureUsage.RENDER_ATTACHMENT,
     });
     const earth = new EarthRenderer(device, { format, depthFormat });
+
+    // ---- id-picking (V2): an offscreen pass writes object ids; a 1x1 readback
+    // at the cursor returns the object under it ----
+    const pickFormat: GPUTextureFormat = "rgba8unorm";
+    const idTexture = device.createTexture({
+      size: [canvas.width, canvas.height],
+      format: pickFormat,
+      usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC,
+    });
+    const idDepth = device.createTexture({
+      size: [canvas.width, canvas.height],
+      format: depthFormat,
+      usage: GPUTextureUsage.RENDER_ATTACHMENT,
+    });
+    const pickReadback = device.createBuffer({
+      size: 256,
+      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+    });
+    let pickX = -1;
+    let pickY = -1;
+    let pickPending = false;
+    let pickMapping = false;
+    let hoveredIndex = -1;
+    const pickEl = document.getElementById("pick") as HTMLElement;
 
     say("loading catalog...");
     const { mode, multiplier } = readVariant();
@@ -246,7 +276,12 @@ async function main(): Promise<void> {
     source.onResult = (positions, minutes, failed) => {
       latestPositions = positions;
       if (renderer === undefined) {
-        renderer = new PointRenderer(device, { capacity: source.count, format, depthFormat });
+        renderer = new PointRenderer(device, {
+          capacity: source.count,
+          format,
+          depthFormat,
+          pickFormat,
+        });
         if (colors) renderer.setColors(colors);
       }
       renderer.updatePositions(positions, source.count);
@@ -271,12 +306,37 @@ async function main(): Promise<void> {
       canvas.setPointerCapture(e.pointerId);
     });
     canvas.addEventListener("pointermove", (e) => {
+      // request a pick under the cursor (device pixels) every move
+      pickX = Math.round(e.offsetX * devicePixelRatio);
+      pickY = Math.round(e.offsetY * devicePixelRatio);
+      pickPending = true;
       if (!dragging) return;
       view.lonDeg -= (e.clientX - lastX) * 0.25;
       view.latDeg = Math.max(-89, Math.min(89, view.latDeg + (e.clientY - lastY) * 0.25));
       lastX = e.clientX;
       lastY = e.clientY;
     });
+    canvas.addEventListener("pointerleave", () => {
+      pickPending = false;
+      setHover(-1);
+    });
+    // hovered object: white-boost the point + show its name (mechanism dv.gl
+    // provides the id; naming/highlight policy lives here in the app)
+    const setHover = (idx: number): void => {
+      if (idx === hoveredIndex) return;
+      hoveredIndex = idx;
+      if (colors) {
+        const boosted = new Float32Array(colors);
+        if (idx >= 0) boosted.set([1, 1, 1, boosted[idx * 4 + 3] ?? 1], idx * 4);
+        renderer?.setColors(boosted);
+      }
+      if (idx >= 0) {
+        pickEl.style.display = "block";
+        pickEl.textContent = source.names?.[idx] ?? `object ${idx}`;
+      } else {
+        pickEl.style.display = "none";
+      }
+    };
     canvas.addEventListener("pointerup", () => {
       dragging = false;
     });
@@ -502,7 +562,44 @@ async function main(): Promise<void> {
       }
       renderer?.draw(pass);
       pass.end();
-      device.queue.submit([encoder.finish()]);
+
+      // id-pick pass: only when a pick is pending and no readback in flight
+      if (pickPending && !pickMapping && renderer && pickX >= 0 && pickY >= 0 && pickX < canvas.width && pickY < canvas.height) {
+        const idPass = encoder.beginRenderPass({
+          colorAttachments: [
+            {
+              view: idTexture.createView(),
+              clearValue: { r: 0, g: 0, b: 0, a: 0 },
+              loadOp: "clear",
+              storeOp: "store",
+            },
+          ],
+          depthStencilAttachment: {
+            view: idDepth.createView(),
+            depthClearValue: 1,
+            depthLoadOp: "clear",
+            depthStoreOp: "store",
+          },
+        });
+        renderer.drawIds(idPass);
+        idPass.end();
+        encoder.copyTextureToBuffer(
+          { texture: idTexture, origin: { x: pickX, y: pickY } },
+          { buffer: pickReadback, bytesPerRow: 256 },
+          { width: 1, height: 1 },
+        );
+        pickPending = false;
+        pickMapping = true;
+        device.queue.submit([encoder.finish()]);
+        void pickReadback.mapAsync(GPUMapMode.READ).then(() => {
+          const bytes = new Uint8Array(pickReadback.getMappedRange().slice(0, 4));
+          pickReadback.unmap();
+          pickMapping = false;
+          setHover(decodePickedIndex(bytes));
+        });
+      } else {
+        device.queue.submit([encoder.finish()]);
+      }
       requestAnimationFrame(tick);
     };
     say("drag to orbit, wheel to zoom, slider to scrub");

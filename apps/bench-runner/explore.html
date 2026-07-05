@@ -8,6 +8,9 @@
       #scene { width: 100vw; height: 100vh; display: block; touch-action: none; }
       #status { position: fixed; top: 8px; left: 8px; color: #9f9; font: 13px monospace; z-index: 9; }
       #clock { position: fixed; top: 8px; right: 12px; color: #8df; font: 13px monospace; z-index: 9; }
+      #pick { position: fixed; top: 8px; left: 50%; transform: translateX(-50%); z-index: 9;
+              color: #eef; font: 13px monospace; padding: 3px 10px; border-radius: 4px;
+              background: rgba(20,26,48,0.9); display: none; pointer-events: none; }
       #bar { position: fixed; bottom: 0; left: 0; right: 0; display: flex; gap: 12px;
              align-items: center; padding: 14px 18px; background: rgba(16,20,38,0.95);
              border-top: 1px solid #35406b; z-index: 9; }
@@ -36,6 +39,7 @@
   <body>
     <div id="status">loading...</div>
     <div id="clock"></div>
+    <div id="pick"></div>
     <div id="objects"><div id="objectsHead">&#9662; mission objects</div><div id="objectsBody"></div></div>
     <canvas id="scene"></canvas>
     <div id="bar">
