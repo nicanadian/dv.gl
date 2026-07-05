@@ -54,7 +54,7 @@ export interface AsyncSource {
    * centered on scene time. Optional: absent when the source can't afford it.
    * Latest request wins; delivery via onWindow.
    */
-  requestWindow?(centerMinutes: number, samples: number): void;
+  requestWindow?(centerMinutes: number, samples: number, ecefEpochMs?: number): void;
   onWindow?: (windowKm: Float32Array, centerMinutes: number, samples: number) => void;
   dispose(): void;
 }
@@ -62,12 +62,15 @@ export interface AsyncSource {
 /** Wrap a synchronous PropagationSource window sweep in the async seam. */
 function syncWindow(
   api: AsyncSource,
-  inner: { sampleWindowInto?(c: number, s: number, out: Float32Array): void; count: number },
-): ((centerMinutes: number, samples: number) => void) | undefined {
+  inner: {
+    sampleWindowInto?(c: number, s: number, out: Float32Array, ecefEpochMs?: number): void;
+    count: number;
+  },
+): ((centerMinutes: number, samples: number, ecefEpochMs?: number) => void) | undefined {
   if (!inner.sampleWindowInto) return undefined;
-  return (centerMinutes: number, samples: number): void => {
+  return (centerMinutes: number, samples: number, ecefEpochMs?: number): void => {
     const window = new Float32Array(inner.count * samples * 3);
-    inner.sampleWindowInto?.(centerMinutes, samples, window);
+    inner.sampleWindowInto?.(centerMinutes, samples, window, ecefEpochMs);
     api.onWindow?.(window, centerMinutes, samples);
   };
 }
@@ -203,7 +206,7 @@ async function makeWorkerSource(catalogText: string, multiplier: number): Promis
   let inFlight = false;
   let pending: number | undefined;
   let windowInFlight = false;
-  let windowPending: { c: number; s: number } | undefined;
+  let windowPending: { c: number; s: number; e?: number } | undefined;
   const api: AsyncSource = {
     label: "satellite.js CPU worker (fp64, transferable buffers)",
     count: ready.count,
@@ -216,13 +219,13 @@ async function makeWorkerSource(catalogText: string, multiplier: number): Promis
       inFlight = true;
       worker.postMessage({ type: "propagate", minutes });
     },
-    requestWindow(centerMinutes: number, samples: number): void {
+    requestWindow(centerMinutes: number, samples: number, ecefEpochMs?: number): void {
       if (windowInFlight) {
-        windowPending = { c: centerMinutes, s: samples };
+        windowPending = { c: centerMinutes, s: samples, e: ecefEpochMs };
         return;
       }
       windowInFlight = true;
-      worker.postMessage({ type: "sampleWindow", centerMinutes, samples });
+      worker.postMessage({ type: "sampleWindow", centerMinutes, samples, ecefEpochMs });
     },
     dispose(): void {
       worker.terminate();
@@ -244,7 +247,7 @@ async function makeWorkerSource(catalogText: string, multiplier: number): Promis
       if (windowPending !== undefined) {
         const next = windowPending;
         windowPending = undefined;
-        api.requestWindow?.(next.c, next.s);
+        api.requestWindow?.(next.c, next.s, next.e);
       }
       return;
     }

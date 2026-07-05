@@ -20,6 +20,7 @@
   },
   "dependencies": {
     "@dvgl/core": "workspace:*",
+    "@dvgl/frames": "workspace:*",
     "satellite.js": "^5.0.0"
   }
 }

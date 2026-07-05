@@ -26,6 +26,7 @@
  *   interface (vendored/pinned fork per the dependency posture); swapping it in does
  *   not change the harness or either path's consumption of the buffers.
  */
+import { gmst } from "@dvgl/frames";
 import * as satellite from "satellite.js";
 import type { CatalogObject } from "./catalog.js";
 
@@ -40,7 +41,18 @@ export interface PropagationSource {
    * center). Writes [object][sample][xyz] km, stride 3, into `out`
    * (length >= count*samples*3). Optional: not every source can afford it.
    */
-  sampleWindowInto?(centerMinutes: number, samples: number, out: Float32Array): void;
+  /**
+   * When `ecefEpochMs` is given (the absolute Unix ms of scene time zero), each
+   * sample is rotated into the Earth-fixed frame by GMST AT THAT SAMPLE'S OWN
+   * epoch -- the frame in which successive revs separate into the ground-track
+   * weave instead of overlaying.
+   */
+  sampleWindowInto?(
+    centerMinutes: number,
+    samples: number,
+    out: Float32Array,
+    ecefEpochMs?: number,
+  ): void;
   /**
    * Write TEME positions (km) at `minutesSinceEpoch` into `out` with stride 3
    * (x,y,z per object, in catalog order). Objects that fail to propagate are
@@ -157,7 +169,12 @@ export class SatelliteJsSource implements PropagationSource {
   }
 
   /** +/- one period around centerMinutes, `samples` points per object. */
-  sampleWindowInto(centerMinutes: number, samples: number, out: Float32Array): void {
+  sampleWindowInto(
+    centerMinutes: number,
+    samples: number,
+    out: Float32Array,
+    ecefEpochMs?: number,
+  ): void {
     const n = this.recs.length;
     if (out.length < n * samples * 3) {
       throw new Error(`window buffer too small: need ${n * samples * 3}`);
@@ -168,13 +185,21 @@ export class SatelliteJsSource implements PropagationSource {
       const period = (2 * Math.PI) / rec.satrec.no;
       for (let s = 0; s < samples; s += 1) {
         const frac = (s / (samples - 1)) * 2 - 1; // [-1, 1]
-        const t = centerMinutes + rec.epochOffsetMinutes + frac * period;
-        const pos = readPosition(satellite.sgp4(rec.satrec, t));
+        const tMin = centerMinutes + frac * period;
+        const pos = readPosition(satellite.sgp4(rec.satrec, tMin + rec.epochOffsetMinutes));
         const base = (k * samples + s) * 3;
         if (pos === undefined) {
           out[base] = Number.NaN;
           out[base + 1] = Number.NaN;
           out[base + 2] = Number.NaN;
+        } else if (ecefEpochMs !== undefined) {
+          // rotate THIS sample by GMST at its own epoch: the ground-track weave
+          const theta = gmst(ecefEpochMs + tMin * 60_000);
+          const c = Math.cos(theta);
+          const si = Math.sin(theta);
+          out[base] = c * pos.x + si * pos.y;
+          out[base + 1] = -si * pos.x + c * pos.y;
+          out[base + 2] = pos.z;
         } else {
           out[base] = pos.x;
           out[base + 1] = pos.y;

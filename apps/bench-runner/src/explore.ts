@@ -233,6 +233,10 @@ async function main(): Promise<void> {
       if (!tracksBox.checked) tracks?.clear();
       lastWindowCenterMin = Number.NEGATIVE_INFINITY;
     });
+    // switching frames changes what the track DATA means: recompute
+    ecefBox.addEventListener("change", () => {
+      lastWindowCenterMin = Number.NEGATIVE_INFINITY;
+    });
     source.onWindow = (windowKm, _centerMinutes, samples) => {
       tracks ??= new OrbitTrackRenderer(device, {
         capacity: source.count,
@@ -264,7 +268,12 @@ async function main(): Promise<void> {
         const centerMin = clock.currentSeconds / 60;
         if (Math.abs(centerMin - lastWindowCenterMin) > 12) {
           lastWindowCenterMin = centerMin;
-          source.requestWindow?.(centerMin, TRACK_SAMPLES);
+          // earth-fixed: window computed in ECEF (per-sample GMST) -> the weave
+          source.requestWindow?.(
+            centerMin,
+            TRACK_SAMPLES,
+            ecefBox.checked ? clock.epochMs : undefined,
+          );
         }
       }
 
@@ -278,7 +287,8 @@ async function main(): Promise<void> {
       const viewProjRte = mul(proj, lookAtRte(eye));
       earth.updateCamera(viewProjRte, eye, gmstRad);
       renderer?.updateCamera(viewProjRte, eye, canvas.width, canvas.height);
-      if (tracksBox.checked) tracks?.updateCamera(viewProjRte, eye);
+      if (tracksBox.checked)
+        tracks?.updateCamera(viewProjRte, eye, ecefBox.checked ? gmstRad : 0);
 
       const encoder = device.createCommandEncoder();
       const pass = encoder.beginRenderPass({

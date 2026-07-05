@@ -33,6 +33,7 @@ interface WindowMsg {
   readonly type: "sampleWindow";
   readonly centerMinutes: number;
   readonly samples: number;
+  readonly ecefEpochMs?: number;
 }
 type InMsg = InitMsg | PropagateMsg | WindowMsg;
 
@@ -54,7 +55,7 @@ self.onmessage = (e: MessageEvent<InMsg>) => {
   if (msg.type === "sampleWindow") {
     if (source === undefined) throw new Error("worker: sampleWindow before init");
     const window = new Float32Array(source.count * msg.samples * 3);
-    source.sampleWindowInto(msg.centerMinutes, msg.samples, window);
+    source.sampleWindowInto(msg.centerMinutes, msg.samples, window, msg.ecefEpochMs);
     self.postMessage(
       { type: "window", centerMinutes: msg.centerMinutes, samples: msg.samples, window },
       { transfer: [window.buffer] },

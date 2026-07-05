@@ -16,6 +16,7 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { gmst } from "@dvgl/frames";
 import { describe, expect, it } from "vitest";
 import { parseCatalog } from "./catalog.js";
 import { catalogEpochMs, jdayToUnixMs, readPosition, SatelliteJsSource } from "./propagation.js";
@@ -179,5 +180,32 @@ describe("sampleWindowInto (SGP4 orbit tracks)", () => {
     );
     expect(d).toBeLessThan(100);
     expect(() => source.sampleWindowInto(0, S, new Float32Array(3))).toThrow(/too small/);
+  });
+});
+
+describe("sampleWindowInto ECEF frame (ground-track weave)", () => {
+  const obj = { name: "LEO", line1: FIXTURE.line1, line2: FIXTURE.line2 };
+
+  it("center sample equals the inertial sample rotated by GMST at that epoch", () => {
+    const epochMs = catalogEpochMs([obj]) ?? 0;
+    const source = new SatelliteJsSource([obj], epochMs);
+    const S = 5;
+    const inertial = new Float32Array(S * 3);
+    const ecef = new Float32Array(S * 3);
+    source.sampleWindowInto(300, S, inertial);
+    source.sampleWindowInto(300, S, ecef, epochMs);
+    const theta = gmst(epochMs + 300 * 60_000);
+    const mid = 2 * 3;
+    const x = inertial[mid] ?? 0;
+    const y = inertial[mid + 1] ?? 0;
+    expect(ecef[mid]).toBeCloseTo(Math.cos(theta) * x + Math.sin(theta) * y, 2);
+    expect(ecef[mid + 1]).toBeCloseTo(-Math.sin(theta) * x + Math.cos(theta) * y, 2);
+    expect(ecef[mid + 2]).toBeCloseTo(inertial[mid + 2] ?? 0, 3);
+    // first and last samples (one rev apart) now DIVERGE: the weave exists
+    const d = Math.hypot(
+      (ecef[0] ?? 0) - (ecef[(S - 1) * 3] ?? 0),
+      (ecef[1] ?? 0) - (ecef[(S - 1) * 3 + 1] ?? 0),
+    );
+    expect(d).toBeGreaterThan(1000); // ~24 deg of Earth rotation at LEO radius
   });
 });

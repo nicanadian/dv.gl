@@ -33,7 +33,7 @@ struct Camera {
   viewProjRte : mat4x4<f32>,
   eyeHigh     : vec4<f32>,
   eyeLow      : vec4<f32>,
-  // samples, count, unused, unused
+  // samples, count, gmstNow (rad; 0 for inertial-frame data), unused
   params      : vec4<f32>,
 };
 
@@ -51,7 +51,14 @@ struct VsOut {
 fn vs(@builtin(vertex_index) s : u32, @builtin(instance_index) i : u32) -> VsOut {
   let samples = u32(cam.params.x);
   let idx = i * samples + s;
-  let rel = (posHigh[idx].xyz - cam.eyeHigh.xyz) + (posLow[idx].xyz - cam.eyeLow.xyz);
+  // ECEF-frame data spins with the planet (same Rz(gmst) as the Earth mesh)
+  let c = cos(cam.params.z);
+  let si = sin(cam.params.z);
+  let ph = posHigh[idx].xyz;
+  let pl = posLow[idx].xyz;
+  let p = vec3<f32>(c * ph.x - si * ph.y, si * ph.x + c * ph.y, ph.z);
+  let l = vec3<f32>(c * pl.x - si * pl.y, si * pl.x + c * pl.y, pl.z);
+  let rel = (p - cam.eyeHigh.xyz) + (l - cam.eyeLow.xyz);
   var out : VsOut;
   out.clip = cam.viewProjRte * vec4<f32>(rel, 1.0);
 
@@ -169,7 +176,11 @@ export class OrbitTrackRenderer {
     this.count = 0;
   }
 
-  updateCamera(viewProjRte: Float32Array, eyeKm: readonly [number, number, number]): void {
+  updateCamera(
+    viewProjRte: Float32Array,
+    eyeKm: readonly [number, number, number],
+    gmstNowRad = 0,
+  ): void {
     this.cameraStage.set(viewProjRte, 0);
     for (let i = 0; i < 3; i += 1) {
       const c = eyeKm[i] ?? 0;
@@ -179,6 +190,7 @@ export class OrbitTrackRenderer {
     }
     this.cameraStage[24] = this.samples;
     this.cameraStage[25] = this.count;
+    this.cameraStage[26] = gmstNowRad;
     this.device.queue.writeBuffer(this.cameraBuf, 0, this.cameraStage);
   }
 

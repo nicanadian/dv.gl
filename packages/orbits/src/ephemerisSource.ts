@@ -25,6 +25,7 @@
  * rather than frozen at the ends -- a clamped satellite looks like real data.
  */
 import { SampledTrack } from "@dvgl/core";
+import { gmst } from "@dvgl/frames";
 import type { OemSegment } from "./oem.js";
 import type { PropagationSource } from "./propagation.js";
 
@@ -103,7 +104,12 @@ export class EphemerisSource implements PropagationSource {
    * clamped to each segment's data span -- a track that stops at the boundary of
    * the ephemeris is honest; extrapolating it would not be.
    */
-  sampleWindowInto(centerMinutes: number, samples: number, out: Float32Array): void {
+  sampleWindowInto(
+    centerMinutes: number,
+    samples: number,
+    out: Float32Array,
+    ecefEpochMs?: number,
+  ): void {
     const n = this.entries.length;
     if (out.length < n * samples * 3) {
       throw new Error(`window buffer too small: need ${n * samples * 3}`);
@@ -121,8 +127,18 @@ export class EphemerisSource implements PropagationSource {
         const tSec = Math.min(Math.max(centerSec + frac * periodSec, e.startSec), e.endSec);
         e.track.sampleInto(tSec, this.scratch);
         const base = (k * samples + s) * 3;
-        out[base] = this.scratch[0] ?? Number.NaN;
-        out[base + 1] = this.scratch[1] ?? Number.NaN;
+        const x = this.scratch[0] ?? Number.NaN;
+        const y = this.scratch[1] ?? Number.NaN;
+        if (ecefEpochMs !== undefined) {
+          const theta = gmst(ecefEpochMs + tSec * 1000);
+          const c = Math.cos(theta);
+          const si = Math.sin(theta);
+          out[base] = c * x + si * y;
+          out[base + 1] = -si * x + c * y;
+        } else {
+          out[base] = x;
+          out[base + 1] = y;
+        }
         out[base + 2] = this.scratch[2] ?? Number.NaN;
       }
     }

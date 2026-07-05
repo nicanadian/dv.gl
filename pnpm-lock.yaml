@@ -99,6 +99,9 @@ importers:
       '@dvgl/core':
         specifier: workspace:*
         version: link:../core
+      '@dvgl/frames':
+        specifier: workspace:*
+        version: link:../frames
       satellite.js:
         specifier: ^5.0.0
         version: 5.0.0
