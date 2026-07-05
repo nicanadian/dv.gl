@@ -181,6 +181,7 @@ async function main(): Promise<void> {
     let winRaw: Float32Array | undefined;
     let winSamples = 0;
     let winIsEcef = false;
+    let winPeriods: Float32Array | undefined; // per-object orbital period (min) for the 2D past/future split
 
     const view: View = { lonDeg: -75, latDeg: 25, rangeKm: 45_000 };
 
@@ -543,17 +544,23 @@ async function main(): Promise<void> {
       if (colors) mapPts.setColors(colors);
       mapPts.updateCamera(vp, eye0, canvas.width, canvas.height);
       mapGrat.updateCamera(vp, eye0);
+      if (stationsOn) mapStationPts.updateCamera(vp, eye0, canvas.width, canvas.height);
       // ground tracks: reproject the ECEF orbit window to sub-satellite lon/lat
       // polylines, splitting each trace at the antimeridian so it doesn't smear
       // a horizontal streak across the map.
       let tv = 0;
       if (trackMode() !== "none" && winRaw && winIsEcef && winSamples > 1) {
         const w = winRaw;
+        const nowMin = clock.currentSeconds / 60;
         for (let k = 0; k < source.count; k += 1) {
           if (colors && (colors[k * 4 + 3] ?? 1) === 0) continue; // family filtered off
           const cr = colors?.[k * 4] ?? 0.6;
           const cg = colors?.[k * 4 + 1] ?? 0.8;
           const cb = colors?.[k * 4 + 2] ?? 1;
+          // past/future boundary: which sample corresponds to "now" (same convention
+          // as the 3D tracks -- frac in [-1,1] over +/-1 period around the window centre)
+          const period = winPeriods?.[k] ?? 90;
+          const fracNow = (nowMin - lastWindowCenterMin) / (period || 90);
           const base = k * winSamples * 3;
           let plon = Number.NaN;
           let plat = Number.NaN;
@@ -571,19 +578,23 @@ async function main(): Promise<void> {
               ok = true;
             }
             if (pok && ok && Math.abs(lon - plon) < 180) {
+              // segment [s-1, s]: past = full luminance, next rev = dimmed (CVD-safe,
+              // no alpha/dash tricks -- luminance carries past vs future)
+              const fracSeg = ((s - 0.5) / (winSamples - 1)) * 2 - 1;
+              const lum = fracSeg <= fracNow ? 1 : 0.4;
               mapTrkPos[tv * 3] = plon / 90;
               mapTrkPos[tv * 3 + 1] = plat / 90;
-              mapTrkCol[tv * 4] = cr;
-              mapTrkCol[tv * 4 + 1] = cg;
-              mapTrkCol[tv * 4 + 2] = cb;
-              mapTrkCol[tv * 4 + 3] = 0.65;
+              mapTrkCol[tv * 4] = cr * lum;
+              mapTrkCol[tv * 4 + 1] = cg * lum;
+              mapTrkCol[tv * 4 + 2] = cb * lum;
+              mapTrkCol[tv * 4 + 3] = 0.85;
               tv += 1;
               mapTrkPos[tv * 3] = lon / 90;
               mapTrkPos[tv * 3 + 1] = lat / 90;
-              mapTrkCol[tv * 4] = cr;
-              mapTrkCol[tv * 4 + 1] = cg;
-              mapTrkCol[tv * 4 + 2] = cb;
-              mapTrkCol[tv * 4 + 3] = 0.65;
+              mapTrkCol[tv * 4] = cr * lum;
+              mapTrkCol[tv * 4 + 1] = cg * lum;
+              mapTrkCol[tv * 4 + 2] = cb * lum;
+              mapTrkCol[tv * 4 + 3] = 0.85;
               tv += 1;
             }
             plon = lon;
@@ -670,6 +681,7 @@ async function main(): Promise<void> {
       mapGrat.draw(pass);
       if (tv > 0) mapTracks.draw(pass);
       if (ftv > 0) mapFp.draw(pass);
+      if (stationsOn) mapStationPts.draw(pass);
       mapPts.draw(pass);
       pass.end();
       device.queue.submit([enc.finish()]);
@@ -935,6 +947,7 @@ async function main(): Promise<void> {
       winRaw = windowKm; // raw (un-surfaced) samples for the 2D ground-track reprojection
       winSamples = samples;
       winIsEcef = trackEcef();
+      winPeriods = periodsMinutes;
       lastWindowCenterMin = centerMinutes; // the split offset is measured from HERE
     };
 
@@ -964,7 +977,39 @@ async function main(): Promise<void> {
     });
     const segPos = new Float32Array(STATIONS.length * source.count * 2 * 3);
     const segCol = new Float32Array(STATIONS.length * source.count * 2 * 4);
-    const stationsBox = document.getElementById("stations") as HTMLInputElement;
+    // stations are mission objects: their visibility toggle lives in the objects
+    // panel (right), not the layers dock. A green row toggles the whole network.
+    let stationsOn = false;
+    {
+      const body = document.getElementById("objectsBody");
+      if (body) {
+        const row = document.createElement("div");
+        row.className = "objRow off";
+        row.innerHTML =
+          `<span class="objSwatch" style="background:rgb(179,255,179)"></span>` +
+          `<span class="objName">GROUND STATIONS</span><span class="objCount">${STATIONS.length}</span>`;
+        row.addEventListener("click", () => {
+          stationsOn = !stationsOn;
+          row.classList.toggle("off", !stationsOn);
+        });
+        body.appendChild(row);
+        (document.getElementById("objects") as HTMLElement).style.display = "block";
+      }
+    }
+    // 2D map station markers (green dots at each station's lon/lat)
+    const mapStationPts = new PointRenderer(device, {
+      capacity: STATIONS.length,
+      format,
+      pointSizePx: 7,
+    });
+    mapStationPts.setColors(new Float32Array(STATIONS.flatMap(() => [0.7, 1.0, 0.7, 1.0])));
+    const mapStationPos = new Float32Array(STATIONS.length * 3);
+    for (let i = 0; i < STATIONS.length; i += 1) {
+      mapStationPos[i * 3] = (STATIONS[i]?.lonDeg ?? 0) / 90;
+      mapStationPos[i * 3 + 1] = (STATIONS[i]?.latDeg ?? 0) / 90;
+      mapStationPos[i * 3 + 2] = 0;
+    }
+    mapStationPts.updatePositions(mapStationPos, STATIONS.length);
 
     let lastT = performance.now();
     const tick = (): void => {
@@ -1020,7 +1065,7 @@ async function main(): Promise<void> {
 
       // stations + access lines: place stations in the inertial world (Rz(+gmst))
       // and draw a line to each satellite currently above that station's mask.
-      if (stationsBox.checked) {
+      if (stationsOn) {
         const cg = Math.cos(gmstRad);
         const sg = Math.sin(gmstRad);
         for (let i = 0; i < STATIONS.length; i += 1) {
@@ -1203,7 +1248,7 @@ async function main(): Promise<void> {
       earth.draw(pass); // writes depth: satellites occlude behind the planet
       if (coverageBox.checked) coverageSphere.draw(pass); // filled age field on the surface
       if (trackMode() !== "none") tracks?.draw(pass); // under the points
-      if (stationsBox.checked) {
+      if (stationsOn) {
         accessLines.draw(pass);
         stationPts.draw(pass);
       }
