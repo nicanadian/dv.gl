@@ -137,28 +137,56 @@ async function main(): Promise<void> {
 
     const view: View = { lonDeg: -75, latDeg: 25, rangeKm: 45_000 };
 
-    // family colors when the source knows object names (EO cyan, SAR gold);
-    // everything else keeps the catalog cyan. The per-object alpha channel is the
-    // mission-type FILTER: 0 hides that family from both points and tracks.
-    const eoBox = document.getElementById("eo") as HTMLInputElement;
-    const sarBox = document.getElementById("sar") as HTMLInputElement;
-    const families = source.names?.map((n) => (/sar/i.test(n) ? "SAR" : "EO"));
+    // Mission-object grouping: when the source knows object names, group them by
+    // family (the alpha token of the sat id, e.g. "SAR-01" -> "SAR") and colour
+    // each family. The per-object alpha channel doubles as the visibility FILTER:
+    // 0 hides that family from both points and tracks. The panel is data-driven,
+    // so any named fleet gets a grouped, collapsible legend.
+    const familyOf = (name: string): string => {
+      const tail = name.split("/").pop() ?? name;
+      return tail.replace(/[\s_-]*\d+$/, "") || tail;
+    };
+    const KNOWN: Record<string, [number, number, number]> = {
+      EO: [0.55, 0.85, 1.0],
+      SAR: [1.0, 0.78, 0.35],
+    };
+    const PALETTE: [number, number, number][] = [
+      [0.55, 0.85, 1.0],
+      [1.0, 0.78, 0.35],
+      [0.6, 1.0, 0.65],
+      [1.0, 0.55, 0.85],
+      [0.8, 0.8, 1.0],
+      [1.0, 0.5, 0.4],
+    ];
+    const families = source.names?.map(familyOf);
+    const groups: { name: string; color: [number, number, number]; count: number; visible: boolean }[] =
+      [];
+    if (families) {
+      for (const fam of families) {
+        let g = groups.find((x) => x.name === fam);
+        if (!g) {
+          g = {
+            name: fam,
+            color: KNOWN[fam] ?? PALETTE[groups.length % PALETTE.length] ?? [0.7, 0.85, 1.0],
+            count: 0,
+            visible: true,
+          };
+          groups.push(g);
+        }
+        g.count += 1;
+      }
+    }
     const buildColors = (): Float32Array | undefined => {
       if (!families) return undefined;
       const rgba = new Float32Array(source.count * 4);
       families.forEach((fam, k) => {
-        const rgb = fam === "SAR" ? [1.0, 0.78, 0.35] : [0.55, 0.85, 1.0];
-        const show = fam === "SAR" ? sarBox.checked : eoBox.checked;
-        rgba.set([rgb[0] ?? 0, rgb[1] ?? 0, rgb[2] ?? 0, show ? 1 : 0], k * 4);
+        const g = groups.find((x) => x.name === fam);
+        const c = g?.color ?? [0.55, 0.85, 1.0];
+        rgba.set([c[0], c[1], c[2], g?.visible ? 1 : 0], k * 4);
       });
       return rgba;
     };
     let colors = buildColors();
-    if (families === undefined) {
-      // no families (TLE catalog): the toggles do nothing
-      eoBox.disabled = true;
-      sarBox.disabled = true;
-    }
     const applyColors = (): void => {
       colors = buildColors();
       if (colors) {
@@ -166,8 +194,29 @@ async function main(): Promise<void> {
         tracks?.setColors(colors);
       }
     };
-    eoBox.addEventListener("change", applyColors);
-    sarBox.addEventListener("change", applyColors);
+    // build the mission-objects panel (top-right, collapsible)
+    const panel = document.getElementById("objects") as HTMLElement;
+    if (families && groups.length > 0) {
+      panel.style.display = "block";
+      const head = document.getElementById("objectsHead") as HTMLElement;
+      head.addEventListener("click", () => panel.classList.toggle("collapsed"));
+      const body = document.getElementById("objectsBody") as HTMLElement;
+      for (const g of groups) {
+        const row = document.createElement("div");
+        row.className = "objRow";
+        const hex = (c: [number, number, number]): string =>
+          `rgb(${Math.round(c[0] * 255)},${Math.round(c[1] * 255)},${Math.round(c[2] * 255)})`;
+        row.innerHTML =
+          `<span class="objSwatch" style="background:${hex(g.color)}"></span>` +
+          `<span class="objName">${g.name}</span><span class="objCount">${g.count}</span>`;
+        row.addEventListener("click", () => {
+          g.visible = !g.visible;
+          row.classList.toggle("off", !g.visible);
+          applyColors();
+        });
+        body.appendChild(row);
+      }
+    }
 
     // @dvgl/core's first consumer: the MissionClock owns play state, rate, looping,
     // and the scene-time axis; the page just feeds it wall deltas and reads it.

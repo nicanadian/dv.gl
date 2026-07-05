@@ -15,11 +15,28 @@
       #time { flex: 1; height: 22px; accent-color: #6ab7ff; cursor: pointer; }
       button, select { background: #26335c; color: #dbe6ff; border: 1px solid #4a5a94;
                        border-radius: 5px; font: 14px monospace; padding: 6px 14px; cursor: pointer; }
+      #objects { position: fixed; top: 32px; right: 12px; z-index: 9;
+                 background: rgba(16,20,38,0.92); border: 1px solid #35406b;
+                 border-radius: 6px; font: 12px monospace; color: #cdd8f0;
+                 min-width: 168px; display: none; }
+      #objectsHead { padding: 7px 10px; cursor: pointer; user-select: none;
+                     color: #8da2d8; border-bottom: 1px solid #2a3252; letter-spacing: .04em; }
+      #objectsBody { padding: 4px 4px 6px; }
+      #objects.collapsed #objectsBody { display: none; }
+      #objects.collapsed #objectsHead { border-bottom: none; }
+      .objRow { display: flex; align-items: center; gap: 8px; padding: 4px 8px; cursor: pointer; }
+      .objRow:hover { background: rgba(90,120,200,0.12); }
+      .objSwatch { width: 11px; height: 11px; border-radius: 2px; flex: none; }
+      .objName { flex: 1; }
+      .objCount { color: #7787ad; }
+      .objRow.off .objName, .objRow.off .objCount { color: #55607d; }
+      .objRow.off .objSwatch { opacity: 0.25; }
     </style>
   </head>
   <body>
     <div id="status">loading...</div>
     <div id="clock"></div>
+    <div id="objects"><div id="objectsHead">&#9662; mission objects</div><div id="objectsBody"></div></div>
     <canvas id="scene"></canvas>
     <div id="bar">
       <button id="play">pause</button>
@@ -30,8 +47,6 @@
       </select>
       <label><input id="ecef" type="checkbox" /> earth-fixed</label>
       <label><input id="tracks" type="checkbox" /> tracks &plusmn;1 orbit</label>
-      <label id="eoLabel"><input id="eo" type="checkbox" checked /> EO</label>
-      <label id="sarLabel"><input id="sar" type="checkbox" checked /> SAR</label>
       <label for="time">timeline (7 days) &#8594;</label>
       <input id="time" type="range" min="0" max="10079" value="0" step="1" />
     </div>
