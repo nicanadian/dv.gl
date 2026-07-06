@@ -16,9 +16,13 @@
 
 // Re-export the stable data surface so consumers import it from one place and are
 // insulated from internal package churn.
+export { MissionClock, type TimelineMark, TimelineMarks } from "@dvgl/core";
 export {
+  accessEvents,
   type Collect,
   EphemerisSource,
+  type EventWindowOptions,
+  eclipseEvents,
   type GroundStation,
   type OemFile,
   type OemSegment,

@@ -21,9 +21,11 @@
  * toggling between them -- exactly what a SolidJS <GeometryView> would do.
  */
 import {
+  accessEvents,
   BasemapLayer,
   CollectsLayer,
   CoverageLayer,
+  eclipseEvents,
   EphemerisSource,
   FieldOfRegardLayer,
   type GroundStation,
@@ -32,12 +34,14 @@ import {
   LabelsLayer,
   HeadingLayer,
   Map2DView,
+  type MissionClock,
   parseBasemap,
   parseCollects,
   parseOem,
   SatellitesLayer,
   Scene,
   TerminatorLayer,
+  type TimelineMark,
   TracksLayer,
 } from "@dvgl/viewer";
 
@@ -86,9 +90,11 @@ async function main(): Promise<void> {
     const sceneOpts = { epochMs: source.epochMs, windowSeconds: source.windowSeconds, rate: 600 };
     let teardown: (() => void) | null = null;
     let mode: "3d" | "2d" = "3d";
+    let activeClock: MissionClock | null = null;
 
     const build3D = async (): Promise<void> => {
       const scene = await Scene.create({ canvas, device, ...sceneOpts });
+      activeClock = scene.clock;
       const sats = new SatellitesLayer({ pointSizePx: 6 });
       sats.setSource(source);
       sats.setColors(colors);
@@ -146,6 +152,7 @@ async function main(): Promise<void> {
 
     const build2D = async (): Promise<void> => {
       const map = await Map2DView.create({ canvas, device, ...sceneOpts });
+      activeClock = map.clock;
       map.setFleetSource(source);
       map.setColors(colors);
       map.setTrackSource(source);
@@ -193,6 +200,59 @@ async function main(): Promise<void> {
       sizeToHost();
       // both views read canvas.width/height each frame; nudge the 3D depth textures
     });
+
+    // C3: a HOST-rendered timeline. The façade supplies TimelineMarks (AOS/LOS +
+    // eclipse) as data + the clock; the app owns the DOM, colours, and scrub.
+    const timelineEl = document.getElementById("timeline") as HTMLElement;
+    const tlabel = document.getElementById("tlabel") as HTMLElement;
+    const windowSec = source.windowSeconds;
+    const CAT_COLOR: Record<string, string> = {
+      aos: "#7CFC98",
+      los: "#5a8",
+      "eclipse-enter": "#8899ff",
+      "eclipse-exit": "#c9a9ff",
+    };
+    // compute off the first paint so the globe shows immediately
+    setTimeout(() => {
+      const marks: TimelineMark[] = [
+        ...accessEvents(STATIONS, source, source.epochMs, {
+          startMinutes: 0,
+          endMinutes: windowSec / 60,
+          stepMinutes: 2,
+        }, source.names),
+        ...eclipseEvents(source, source.epochMs, {
+          startMinutes: 0,
+          endMinutes: windowSec / 60,
+          stepMinutes: 2,
+        }, source.names),
+      ];
+      for (const m of marks) {
+        const tick = document.createElement("div");
+        tick.className = "tick";
+        tick.style.left = `${(m.timeSec / windowSec) * 100}%`;
+        tick.style.background = CAT_COLOR[m.category] ?? "#888";
+        tick.title = `${m.label ?? m.category} @ T+${(m.timeSec / 3600).toFixed(2)}h`;
+        tick.onclick = () => {
+          activeClock?.scrubTo(m.timeSec);
+          activeClock?.pause();
+        };
+        timelineEl.appendChild(tick);
+      }
+      if (status) {
+        status.textContent = `${status.textContent} · ${marks.length} events`;
+      }
+    }, 0);
+
+    // playhead follows whichever view's clock is live
+    const playhead = document.createElement("div");
+    playhead.className = "playhead";
+    timelineEl.appendChild(playhead);
+    setInterval(() => {
+      if (!activeClock) return;
+      const f = activeClock.currentSeconds / windowSec;
+      playhead.style.left = `${f * 100}%`;
+      tlabel.textContent = `T+${(activeClock.currentSeconds / 3600).toFixed(2)}h`;
+    }, 100);
   } catch (e) {
     if (status) status.textContent = `error: ${(e as Error).message}`;
   }

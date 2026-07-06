@@ -23,6 +23,7 @@ export * from "./catalog.js";
 export * from "./collects.js";
 export * from "./coverage.js";
 export * from "./ephemerisSource.js";
+export * from "./events.js";
 export * from "./footprint.js";
 export * from "./oem.js";
 export * from "./propagation.js";
