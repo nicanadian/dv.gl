@@ -20,6 +20,7 @@ export type IngestFormat = (typeof SUPPORTED_INGEST_FORMATS)[number];
 
 export * from "./access.js";
 export * from "./catalog.js";
+export * from "./collects.js";
 export * from "./coverage.js";
 export * from "./ephemerisSource.js";
 export * from "./footprint.js";

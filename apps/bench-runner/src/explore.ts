@@ -32,8 +32,12 @@ import {
 } from "@dvgl/webgpu";
 import {
   catalogEpochMs,
+  type Collect,
+  collectGroundRing,
+  collectState,
+  collectTargetEcef,
   elevationDeg,
-  footprintCentralAngleRad,
+  parseCollects,
   parseCatalog,
   RevisitGrid,
   sensorSwathEdges,
@@ -313,11 +317,8 @@ async function main(): Promise<void> {
     const headCol = new Float32Array(source.count * 2 * 4);
     const LEADER_KM = 500;
 
-    // V5 sensor footprints: realistic ground SWATHS following the velocity frame
-    // (app policy = which sensor geometry). SAR = a one-sided side-looking strip
-    // over an incidence band (never nadir; the frame flips the geographic side on
-    // ascending vs descending passes); EO = a cross-track field-of-regard band
-    // straddling nadir. dv.gl computes the ground polygon; we fill + outline it.
+    // Ground-swath sizing shared by the field-of-regard geometry below. The
+    // "footprint" layer is retired; it returns as a tasked collect (see below).
     const SWATH_SEG = 14;
     const SWATH_EO: SwathOptions = {
       side: "both",
@@ -326,18 +327,7 @@ async function main(): Promise<void> {
       alongHalfDeg: 4,
       segments: SWATH_SEG,
     };
-    const SWATH: Record<string, SwathOptions> = {
-      SAR: { side: "right", innerOffNadirDeg: 19, outerOffNadirDeg: 41, alongHalfDeg: 4, segments: SWATH_SEG },
-      EO: SWATH_EO,
-    };
-    const swathFor = (fam: string | undefined): SwathOptions => SWATH[fam ?? ""] ?? SWATH_EO;
-    // coverage still stamps a nadir cap; use the outer look angle as its half-angle
-    const perObjHalfAngle = families?.map((f) => swathFor(f).outerOffNadirDeg);
-    // swath-outline sizing (near edge, far edge, two end caps), reused by field of regard
-    const FP_OUTLINE_SEG = SWATH_SEG * 2 + 2;
-    // NOTE: the "footprint" layer is retired for now -- it will return as an actual
-    // tasked collect (planned ground box + spacecraft->footprint beam during the
-    // collect window), driven by real csched collects, not a nominal swath band.
+    const FP_OUTLINE_SEG = SWATH_SEG * 2 + 2; // near edge + far edge + 2 end caps
 
     // Field-of-regard ENVELOPE -- everywhere a sensor COULD steer to (not where it
     // is pointed, and NOT "coverage"). Same swath primitive widened to the full
@@ -467,6 +457,59 @@ async function main(): Promise<void> {
       steps: 6,
     });
 
+    // COLLECTS: real tasked imaging activities (from csched, via mission.collects.json).
+    // A collect is what a "footprint" actually is -- a planned ground box shown ahead
+    // of time, a spacecraft->target beam while it's collecting, and a coverage stamp
+    // once it completes. Data is fetched async; renders only when present.
+    const collectsBox = document.getElementById("collects") as HTMLInputElement;
+    const COLLECT_RING_SEG = 20;
+    const COLLECT_CAP = 128; // max collects drawn at once (state-windowed below)
+    const COLLECT_RADIUS_KM = 230; // viz box radius (a real scene is smaller; not to scale)
+    const COLLECT_CAP_RAD = COLLECT_RADIUS_KM / 6371.0088;
+    const collectFill = new TriRenderer(device, {
+      capacity: COLLECT_CAP * COLLECT_RING_SEG * 3,
+      format,
+      depthFormat,
+    });
+    const collectLines = new LineRenderer(device, {
+      capacity: COLLECT_CAP * (COLLECT_RING_SEG + 1) * 2,
+      format,
+      depthFormat,
+    });
+    const cTriPos = new Float32Array(COLLECT_CAP * COLLECT_RING_SEG * 3 * 3);
+    const cTriCol = new Float32Array(COLLECT_CAP * COLLECT_RING_SEG * 3 * 4);
+    const cSegPos = new Float32Array(COLLECT_CAP * (COLLECT_RING_SEG + 1) * 2 * 3);
+    const cSegCol = new Float32Array(COLLECT_CAP * (COLLECT_RING_SEG + 1) * 2 * 4);
+    let collects: Collect[] = [];
+    let collectRings: Float32Array[] = []; // ECEF ground ring per collect
+    let collectCenters: [number, number, number][] = []; // ECEF target per collect
+    let collectSatIdx: number[] = []; // owning object index per collect (-1 if unknown)
+    void (async () => {
+      try {
+        const resp = await fetch("./mission.collects.json");
+        if (!resp.ok) return;
+        collects = parseCollects(await resp.json(), clock.epochMs);
+        const idxByName = new Map<string, number>();
+        source.names?.forEach((n, i) => idxByName.set(n.split("/").pop() ?? n, i));
+        collectRings = collects.map((c) =>
+          collectGroundRing(c.targetLatDeg, c.targetLonDeg, COLLECT_RADIUS_KM, COLLECT_RING_SEG, 5),
+        );
+        collectCenters = collects.map((c) => collectTargetEcef(c.targetLatDeg, c.targetLonDeg, 5));
+        collectSatIdx = collects.map((c) => idxByName.get(c.sat) ?? -1);
+        collectsBox.disabled = false;
+      } catch {
+        /* no collects for this source */
+      }
+    })();
+    // COVERAGE is now driven by collects: rebuild the revisit grid from completed
+    // collects (stamp at each target's completion time). "Did see" = actually collected.
+    const stampCollects = (nowSec: number): void => {
+      revisit.reset();
+      for (const c of collects) {
+        if (c.endSec <= nowSec) revisit.stamp(c.targetLatDeg, c.targetLonDeg, COLLECT_CAP_RAD, c.endSec / 60);
+      }
+    };
+
     // V9 2D equirectangular map: the same clock + data on a flat lon/lat plane.
     // Plane coords: x = lon/90 in [-2,2], y = lat/90 in [-1,1]. No depth (flat).
     const map2dBox = document.getElementById("map2d") as HTMLInputElement;
@@ -590,6 +633,7 @@ async function main(): Promise<void> {
         mapTracks.updateCamera(vp, eye0);
       }
       if (coverageBox.checked) {
+        stampCollects(clock.currentSeconds); // coverage = completed collects
         revisit.ageTexture(clock.currentSeconds / 60, COV_WINDOW_MIN, ageBuf);
         coveragePlane.setField(ageBuf);
         coveragePlane.updateCamera(vp, eye0, 0);
@@ -660,25 +704,6 @@ async function main(): Promise<void> {
       }
       prevPositions.set(positions.subarray(0, source.count * 3));
       prevMin = minutes;
-      // V7: accumulate coverage as scene time advances (footprint sub-points)
-      if (coverageBox.checked) {
-        const theta = gmst(clock.epochMs + minutes * 60_000);
-        const cc = Math.cos(theta);
-        const ss = Math.sin(theta);
-        for (let k = 0; k < source.count; k += 1) {
-          if (colors && (colors[k * 4 + 3] ?? 1) === 0) continue;
-          const x = positions[k * 3] ?? Number.NaN;
-          const y = positions[k * 3 + 1] ?? Number.NaN;
-          const z = positions[k * 3 + 2] ?? Number.NaN;
-          if (!Number.isFinite(x)) continue;
-          const ex = cc * x + ss * y;
-          const ey = -ss * x + cc * y;
-          const g = ecefToGeodetic(ex, ey, z);
-          const r = Math.hypot(ex, ey, z);
-          // record the last-seen scene time for cells under this footprint
-          revisit.stamp(g.latDeg, g.lonDeg, footprintCentralAngleRad(r, perObjHalfAngle?.[k] ?? 18), minutes);
-        }
-      }
       const d = Math.floor(minutes / 1440);
       const h = Math.floor((minutes % 1440) / 60);
       const m = Math.floor(minutes % 60);
@@ -1071,9 +1096,118 @@ async function main(): Promise<void> {
         accessLineR.clear();
       }
 
+      // COLLECTS: planned ground boxes (blue outline), the ACTIVE collect (amber
+      // box + a spacecraft->target beam), and just-completed ones (green). ECEF
+      // rings/targets rotate into the world by GMST like the earth-fixed geometry.
+      if (collectsBox.checked && collects.length > 0) {
+        const nowSec = clock.currentSeconds;
+        const cgm = Math.cos(gmstRad);
+        const sgm = Math.sin(gmstRad);
+        let ft = 0; // fill vertices
+        let sv = 0; // outline/beam segments
+        let shown = 0;
+        for (let ci = 0; ci < collects.length && shown < COLLECT_CAP; ci += 1) {
+          const c = collects[ci];
+          if (c === undefined) continue;
+          const st = collectState(c, nowSec, 3600, 900); // 60 min planned lead, 15 min trail
+          if (st === "idle") continue;
+          shown += 1;
+          const ring = collectRings[ci];
+          const ctr = collectCenters[ci];
+          if (!ring || !ctr) continue;
+          // state -> colour + fill/line alpha
+          let cr = 0.7;
+          let cg = 0.8;
+          let cb = 1.0;
+          let fillA = 0;
+          let lineA = 0.55;
+          if (st === "active") {
+            cr = 1;
+            cg = 0.85;
+            cb = 0.35;
+            fillA = 0.32;
+            lineA = 0.95;
+          } else if (st === "recent") {
+            cr = 0.55;
+            cg = 0.9;
+            cb = 0.6;
+            fillA = 0.14;
+          }
+          const cx = cgm * ctr[0] - sgm * ctr[1];
+          const cy = sgm * ctr[0] + cgm * ctr[1];
+          const cz = ctr[2];
+          const seg = ring.length / 3;
+          // rotate ring into world once
+          const wr = new Float32Array(seg * 3);
+          for (let j = 0; j < seg; j += 1) {
+            const x = ring[j * 3] ?? 0;
+            const y = ring[j * 3 + 1] ?? 0;
+            wr[j * 3] = cgm * x - sgm * y;
+            wr[j * 3 + 1] = sgm * x + cgm * y;
+            wr[j * 3 + 2] = ring[j * 3 + 2] ?? 0;
+          }
+          for (let j = 0; j < seg; j += 1) {
+            const k = (j + 1) % seg;
+            // outline edge
+            const p = sv * 6;
+            cSegPos[p] = wr[j * 3] ?? 0;
+            cSegPos[p + 1] = wr[j * 3 + 1] ?? 0;
+            cSegPos[p + 2] = wr[j * 3 + 2] ?? 0;
+            cSegPos[p + 3] = wr[k * 3] ?? 0;
+            cSegPos[p + 4] = wr[k * 3 + 1] ?? 0;
+            cSegPos[p + 5] = wr[k * 3 + 2] ?? 0;
+            cSegCol.set([cr, cg, cb, lineA, cr, cg, cb, lineA], sv * 8);
+            sv += 1;
+            // fill triangle (centre, j, k)
+            if (fillA > 0) {
+              const t = ft * 3;
+              cTriPos[t] = cx;
+              cTriPos[t + 1] = cy;
+              cTriPos[t + 2] = cz;
+              cTriPos[t + 3] = wr[j * 3] ?? 0;
+              cTriPos[t + 4] = wr[j * 3 + 1] ?? 0;
+              cTriPos[t + 5] = wr[j * 3 + 2] ?? 0;
+              cTriPos[t + 6] = wr[k * 3] ?? 0;
+              cTriPos[t + 7] = wr[k * 3 + 1] ?? 0;
+              cTriPos[t + 8] = wr[k * 3 + 2] ?? 0;
+              cTriCol.set([cr, cg, cb, fillA], ft * 4);
+              cTriCol.set([cr, cg, cb, fillA], (ft + 1) * 4);
+              cTriCol.set([cr, cg, cb, fillA], (ft + 2) * 4);
+              ft += 3;
+            }
+          }
+          // beam from the collecting spacecraft down to the target
+          const satIdx = collectSatIdx[ci] ?? -1;
+          if (st === "active" && satIdx >= 0 && latestPositions) {
+            const sx = latestPositions[satIdx * 3];
+            const sy = latestPositions[satIdx * 3 + 1];
+            const sz = latestPositions[satIdx * 3 + 2];
+            if (Number.isFinite(sx)) {
+              const p = sv * 6;
+              cSegPos[p] = sx ?? 0;
+              cSegPos[p + 1] = sy ?? 0;
+              cSegPos[p + 2] = sz ?? 0;
+              cSegPos[p + 3] = cx;
+              cSegPos[p + 4] = cy;
+              cSegPos[p + 5] = cz;
+              cSegCol.set([1, 0.85, 0.35, 0.9, 1, 0.85, 0.35, 0.9], sv * 8);
+              sv += 1;
+            }
+          }
+        }
+        collectFill.setTriangles(cTriPos, cTriCol, ft / 3);
+        collectFill.updateCamera(viewProjRte, eye);
+        collectLines.setSegments(cSegPos, cSegCol, sv);
+        collectLines.updateCamera(viewProjRte, eye);
+      } else {
+        collectFill.clear();
+        collectLines.clear();
+      }
+
       // COVERAGE: age-of-collection field draped on the globe (viridis, GMST-spun
       // so it sits earth-fixed like the footprints that wrote it)
       if (coverageBox.checked) {
+        stampCollects(clock.currentSeconds); // coverage = completed collects
         revisit.ageTexture(clock.currentSeconds / 60, COV_WINDOW_MIN, ageBuf);
         coverageSphere.setField(ageBuf);
         coverageSphere.updateCamera(viewProjRte, eye, gmstRad);
@@ -1165,6 +1299,10 @@ async function main(): Promise<void> {
       if (accessBox.checked) {
         accessFill.draw(pass); // field-of-regard envelope
         accessLineR.draw(pass);
+      }
+      if (collectsBox.checked) {
+        collectFill.draw(pass); // collect boxes...
+        collectLines.draw(pass); // ...outlines + active beam
       }
       if (headingBox.checked) headingLines.draw(pass);
       renderer?.draw(pass);
