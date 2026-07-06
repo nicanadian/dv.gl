@@ -55,6 +55,10 @@ export {
   type SatellitesLayerOptions,
 } from "./layers/satellites.js";
 export {
+  TerminatorLayer,
+  type TerminatorLayerOptions,
+} from "./layers/terminator.js";
+export {
   TracksLayer,
   type TracksLayerOptions,
   type WindowSource,

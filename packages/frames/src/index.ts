@@ -15,4 +15,5 @@
  */
 
 export * from "./gmst.js";
+export * from "./sun.js";
 export * from "./transforms.js";

@@ -37,6 +37,7 @@ import {
   parseOem,
   SatellitesLayer,
   Scene,
+  TerminatorLayer,
   TracksLayer,
 } from "@dvgl/viewer";
 
@@ -93,6 +94,7 @@ async function main(): Promise<void> {
       sats.setColors(colors);
 
       if (basemap) scene.add(new BasemapLayer(basemap));
+      scene.add(new TerminatorLayer());
       scene.add(new CoverageLayer({ collects }));
       scene.add(new TracksLayer({ source, fleet: sats, mode: "orbit" }));
       scene.add(new FieldOfRegardLayer({ fleet: sats }));
