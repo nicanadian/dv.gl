@@ -33,6 +33,7 @@ import {
 import {
   catalogEpochMs,
   type Collect,
+  collectDims,
   collectFootprintCorners,
   collectState,
   collectTargetEcef,
@@ -484,6 +485,7 @@ async function main(): Promise<void> {
     let collectRings: Float32Array[] = []; // ECEF ground ring per collect
     let collectCenters: [number, number, number][] = []; // ECEF target per collect
     let collectSatIdx: number[] = []; // owning object index per collect (-1 if unknown)
+    let rebuildCollectMarks: () => void = () => {}; // set by the timeline-marks block
     void (async () => {
       try {
         const resp = await fetch("./mission.collects.json");
@@ -491,12 +493,21 @@ async function main(): Promise<void> {
         collects = parseCollects(await resp.json(), clock.epochMs);
         const idxByName = new Map<string, number>();
         source.names?.forEach((n, i) => idxByName.set(n.split("/").pop() ?? n, i));
-        collectRings = collects.map((c) =>
-          collectFootprintCorners(c.targetLatDeg, c.targetLonDeg, c.sensor, c.lookAngleDeg, 5),
-        );
+        collectRings = collects.map((c) => {
+          const d = collectDims(c);
+          return collectFootprintCorners(
+            c.targetLatDeg,
+            c.targetLonDeg,
+            d.crossKm,
+            d.alongKm,
+            c.lookAngleDeg,
+            5,
+          );
+        });
         collectCenters = collects.map((c) => collectTargetEcef(c.targetLatDeg, c.targetLonDeg, 5));
         collectSatIdx = collects.map((c) => idxByName.get(c.sat) ?? -1);
         collectsBox.disabled = false;
+        rebuildCollectMarks(); // put a clickable tick on the timeline per collect
       } catch {
         /* no collects for this source */
       }
@@ -516,6 +527,13 @@ async function main(): Promise<void> {
     const mapPts = new PointRenderer(device, { capacity: source.count, format, pointSizePx: 4 });
     const mapGrat = new LineRenderer(device, { capacity: 4096, format });
     const mapTracks = new LineRenderer(device, { capacity: source.count * TRACK_SAMPLES * 2, format });
+    // 2D collect footprints (fill + outline + active beam), all depth-free
+    const mapCollectFill = new TriRenderer(device, { capacity: 128 * 4 * 3, format });
+    const mapCollectLines = new LineRenderer(device, { capacity: 128 * 6 * 2, format });
+    const mcTri = new Float32Array(128 * 4 * 3 * 3);
+    const mcTriC = new Float32Array(128 * 4 * 3 * 4);
+    const mcSeg = new Float32Array(128 * 6 * 2 * 3);
+    const mcSegC = new Float32Array(128 * 6 * 2 * 4);
     const mapPos = new Float32Array(source.count * 3);
     const mapTrkPos = new Float32Array(source.count * TRACK_SAMPLES * 2 * 3);
     const mapTrkCol = new Float32Array(source.count * TRACK_SAMPLES * 2 * 4);
@@ -638,6 +656,101 @@ async function main(): Promise<void> {
         coveragePlane.setField(ageBuf);
         coveragePlane.updateCamera(vp, eye0, 0);
       }
+      // collect footprints on the map: project the ECEF box corners to lon/lat,
+      // fill + outline by state, and a sat->target beam while active
+      let mcT = 0;
+      let mcS = 0;
+      if (collectsBox.checked && collects.length > 0) {
+        const nowSec = clock.currentSeconds;
+        let shown = 0;
+        for (let ci = 0; ci < collects.length && shown < 120; ci += 1) {
+          const c = collects[ci];
+          if (c === undefined) continue;
+          const st = collectState(c, nowSec, 3600, 900);
+          if (st === "idle") continue;
+          const ring = collectRings[ci];
+          const ctr = collectCenters[ci];
+          if (!ring || !ctr) continue;
+          shown += 1;
+          let cr = 0.7;
+          let cg = 0.8;
+          let cb = 1.0;
+          let fillA = 0;
+          let lineA = 0.55;
+          if (st === "active") {
+            cr = 1;
+            cg = 0.85;
+            cb = 0.35;
+            fillA = 0.32;
+            lineA = 0.95;
+          } else if (st === "recent") {
+            cr = 0.55;
+            cg = 0.9;
+            cb = 0.6;
+            fillA = 0.14;
+          }
+          const seg = ring.length / 3;
+          const px = new Float32Array(seg * 2);
+          let xmin = Infinity;
+          let xmax = -Infinity;
+          for (let j = 0; j < seg; j += 1) {
+            const g = ecefToGeodetic(ring[j * 3] ?? 0, ring[j * 3 + 1] ?? 0, ring[j * 3 + 2] ?? 0);
+            px[j * 2] = g.lonDeg / 90;
+            px[j * 2 + 1] = g.latDeg / 90;
+            xmin = Math.min(xmin, px[j * 2] ?? 0);
+            xmax = Math.max(xmax, px[j * 2] ?? 0);
+          }
+          if (xmax - xmin > 2) continue; // antimeridian: skip smeared box
+          const gc = ecefToGeodetic(ctr[0], ctr[1], ctr[2]);
+          const cxp = gc.lonDeg / 90;
+          const cyp = gc.latDeg / 90;
+          for (let j = 0; j < seg; j += 1) {
+            const k = (j + 1) % seg;
+            const p = mcS * 6;
+            mcSeg[p] = px[j * 2] ?? 0;
+            mcSeg[p + 1] = px[j * 2 + 1] ?? 0;
+            mcSeg[p + 3] = px[k * 2] ?? 0;
+            mcSeg[p + 4] = px[k * 2 + 1] ?? 0;
+            mcSegC.set([cr, cg, cb, lineA, cr, cg, cb, lineA], mcS * 8);
+            mcS += 1;
+            if (fillA > 0) {
+              const t = mcT * 3;
+              mcTri[t] = cxp;
+              mcTri[t + 1] = cyp;
+              mcTri[t + 3] = px[j * 2] ?? 0;
+              mcTri[t + 4] = px[j * 2 + 1] ?? 0;
+              mcTri[t + 6] = px[k * 2] ?? 0;
+              mcTri[t + 7] = px[k * 2 + 1] ?? 0;
+              mcTriC.set([cr, cg, cb, fillA], mcT * 4);
+              mcTriC.set([cr, cg, cb, fillA], (mcT + 1) * 4);
+              mcTriC.set([cr, cg, cb, fillA], (mcT + 2) * 4);
+              mcT += 3;
+            }
+          }
+          const si = collectSatIdx[ci] ?? -1;
+          if (st === "active" && si >= 0 && latestPositions) {
+            const x = latestPositions[si * 3] ?? Number.NaN;
+            if (Number.isFinite(x)) {
+              const y = latestPositions[si * 3 + 1] ?? 0;
+              const z = latestPositions[si * 3 + 2] ?? 0;
+              const g = ecefToGeodetic(cc * x + ss * y, -ss * x + cc * y, z);
+              const p = mcS * 6;
+              mcSeg[p] = g.lonDeg / 90;
+              mcSeg[p + 1] = g.latDeg / 90;
+              mcSeg[p + 3] = cxp;
+              mcSeg[p + 4] = cyp;
+              mcSegC.set([1, 0.85, 0.35, 0.9, 1, 0.85, 0.35, 0.9], mcS * 8);
+              mcS += 1;
+            }
+          }
+        }
+        if (mcT > 0) {
+          mapCollectFill.setTriangles(mcTri, mcTriC, mcT / 3);
+          mapCollectFill.updateCamera(vp, eye0);
+        }
+        mapCollectLines.setSegments(mcSeg, mcSegC, mcS);
+        mapCollectLines.updateCamera(vp, eye0);
+      }
       void n;
       const enc = device.createCommandEncoder();
       const pass = enc.beginRenderPass({
@@ -654,6 +767,10 @@ async function main(): Promise<void> {
       mapGrat.draw(pass);
       if (tv > 0) mapTracks.draw(pass);
       if (stationsOn) mapStationPts.draw(pass);
+      if (mcS > 0) {
+        if (mcT > 0) mapCollectFill.draw(pass);
+        mapCollectLines.draw(pass);
+      }
       mapPts.draw(pass);
       pass.end();
       device.queue.submit([enc.finish()]);
@@ -794,22 +911,21 @@ async function main(): Promise<void> {
       clock.rate = Number(speedSel.value);
     });
 
-    // V6 event marks: a @dvgl/core TimelineMarks the app fills with meaning. Here
-    // we seed deterministic synthetic events; dv.gl provides the time-indexing,
-    // the ticks, and jump-to-event ('.'/',').
-    const CATS: Record<string, string> = {
-      collect: "#6ab7ff",
-      contact: "#7fe0a0",
-      eclipse: "#c9a0ff",
-      maneuver: "#ff9e6b",
-    };
-    const catList = Object.keys(CATS);
-    const events = Array.from({ length: 14 }, (_, i) => ({
-      timeSec: ((i * 7 + 3) % 20) * (windowSeconds / 20) + windowSeconds / 40,
-      category: catList[i % catList.length] ?? "collect",
-    }));
-    const marks = new TimelineMarks(events);
+    // V6 event marks, now driven by real collects: each collect start is a tick on
+    // the timeline, coloured by sensor and CLICKABLE to scrub the whole viz to that
+    // collect. dv.gl provides the time-indexing + next/prev; the app owns meaning.
+    const CATS: Record<string, string> = { EO: "#8cd6ff", SAR: "#ffc35c" };
+    let marks = new TimelineMarks([]);
     const marksEl = document.getElementById("timeMarks") as HTMLElement;
+    const scrubToTime = (timeSec: number): void => {
+      clock.scrubTo(timeSec);
+      clock.pause();
+      playBtn.textContent = "play";
+      slider.value = String(Math.floor(timeSec / 60));
+      invalidateWindow();
+      revisit.reset();
+      dirty = true;
+    };
     const layoutMarks = (): void => {
       const r = slider.getBoundingClientRect();
       marksEl.style.left = `${r.left}px`;
@@ -821,25 +937,29 @@ async function main(): Promise<void> {
         tick.className = "tick";
         tick.style.left = `${(m.timeSec / windowSeconds) * 100}%`;
         tick.style.background = CATS[m.category] ?? "#8ab";
-        tick.title = m.category;
+        tick.title = `${m.label ?? m.category} @ T+${Math.floor(m.timeSec / 3600)}h${String(Math.floor((m.timeSec % 3600) / 60)).padStart(2, "0")} (click to scrub)`;
+        tick.addEventListener("click", () => scrubToTime(m.timeSec));
         marksEl.appendChild(tick);
       }
     };
+    // rebuild marks from the loaded collects (called from the collect fetch)
+    rebuildCollectMarks = (): void => {
+      marks = new TimelineMarks(
+        collects.map((c) => ({
+          timeSec: c.startSec,
+          category: c.sensor ?? "EO",
+          label: `${c.sat} collect`,
+        })),
+      );
+      layoutMarks();
+    };
     layoutMarks();
     window.addEventListener("resize", layoutMarks);
-    // jump to next/prev event
+    // jump to next/prev collect ('.'/',')
     window.addEventListener("keydown", (e) => {
       const t = clock.currentSeconds;
       const target = e.key === "." ? marks.next(t) : e.key === "," ? marks.prev(t) : undefined;
-      if (target) {
-        clock.scrubTo(target.timeSec);
-        clock.pause();
-        playBtn.textContent = "play";
-        slider.value = String(Math.floor(target.timeSec / 60));
-        invalidateWindow();
-        revisit.reset();
-        dirty = true;
-      }
+      if (target) scrubToTime(target.timeSec);
     });
 
     const ecefBox = document.getElementById("ecef") as HTMLInputElement;

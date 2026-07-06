@@ -24,8 +24,11 @@
       #covLegend .ramp { height: 8px; border-radius: 2px; margin: 5px 0 2px;
                          background: linear-gradient(90deg,#440154,#3b528b,#21918c,#5ec962,#fde725); }
       #covLegend .ends { display: flex; justify-content: space-between; color: #8da2d8; }
-      #timeMarks { position: fixed; height: 7px; z-index: 10; pointer-events: none; }
-      #timeMarks .tick { position: absolute; width: 2px; height: 7px; transform: translateX(-1px); border-radius: 1px; }
+      #timeMarks { position: fixed; height: 9px; z-index: 10; pointer-events: none; }
+      #timeMarks .tick { position: absolute; width: 3px; height: 9px; transform: translateX(-1px);
+                         border-radius: 1px; pointer-events: auto; cursor: pointer;
+                         padding: 3px 3px 0; margin: -3px -3px 0; box-sizing: content-box; }
+      #timeMarks .tick:hover { height: 13px; box-shadow: 0 0 4px currentColor; }
       #time { flex: 1; height: 22px; accent-color: #6ab7ff; cursor: pointer; }
       button, select { background: #26335c; color: #dbe6ff; border: 1px solid #4a5a94;
                        border-radius: 5px; font: 14px monospace; padding: 6px 14px; cursor: pointer; }

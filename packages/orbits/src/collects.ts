@@ -39,6 +39,9 @@ export interface Collect {
   readonly sensor?: string | undefined;
   readonly gsdM?: number | undefined;
   readonly priority?: number | undefined;
+  /** Ground footprint dimensions (km) from the sensor model. */
+  readonly crossKm?: number | undefined;
+  readonly alongKm?: number | undefined;
 }
 
 interface RawCollect {
@@ -52,6 +55,8 @@ interface RawCollect {
   sensor?: string;
   gsdM?: number;
   priority?: number;
+  crossKm?: number;
+  alongKm?: number;
 }
 
 /**
@@ -86,6 +91,8 @@ export function parseCollects(
       sensor: c.sensor,
       gsdM: c.gsdM,
       priority: c.priority,
+      crossKm: c.crossKm,
+      alongKm: c.alongKm,
     });
   }
   out.sort((a, b) => a.startSec - b.startSec);
@@ -160,6 +167,20 @@ export function collectGroundRing(
   return out;
 }
 
+/**
+ * Footprint dimensions (km) for a collect: the sensor-model values when present,
+ * else a per-sensor nominal (EO ~ square scene, SAR ~ elongated strip).
+ */
+export function collectDims(c: {
+  sensor?: string | undefined;
+  crossKm?: number | undefined;
+  alongKm?: number | undefined;
+}): { crossKm: number; alongKm: number } {
+  if (c.crossKm && c.alongKm) return { crossKm: c.crossKm, alongKm: c.alongKm };
+  const sar = (c.sensor ?? "").toUpperCase().startsWith("SAR");
+  return sar ? { crossKm: 24, alongKm: 60 } : { crossKm: 60, alongKm: 60 };
+}
+
 /** Target point on the surface (ECEF km, lifted `bumpKm`). */
 export function collectTargetEcef(
   latDeg: number,
@@ -172,23 +193,23 @@ export function collectTargetEcef(
 }
 
 /**
- * A sensor-shaped footprint rectangle (4 ECEF corners, km, lifted `bumpKm`) at the
- * target, oriented to local east/north. Shape differs by sensor so EO and SAR read
- * apart: EO ~ a compact near-square scene; SAR ~ an elongated side-looking strip.
- * Sizes grow modestly with look angle (a slanted look covers more ground). These
- * are viz-nominal dimensions -- the sim gives target + look angle, not a polygon.
+ * A footprint rectangle (4 ECEF corners, km, lifted `bumpKm`) at the target,
+ * oriented to local east/north: `crossKm` cross-track (east) x `alongKm`
+ * along-track (north). Dimensions come from the sensor model (EO ~ a compact
+ * square scene; SAR ~ an elongated side-looking strip); a slanted look grows the
+ * ground extent by `lookAngleDeg`.
  */
 export function collectFootprintCorners(
   latDeg: number,
   lonDeg: number,
-  sensor: string | undefined,
+  crossKm: number,
+  alongKm: number,
   lookAngleDeg = 0,
   bumpKm = 4,
 ): Float32Array {
-  const isSar = (sensor ?? "").toUpperCase().startsWith("SAR");
   const grow = 1 + Math.min(1, Math.abs(lookAngleDeg) / 45); // slant stretch
-  const halfEW = (isSar ? 18 : 34) * grow; // cross-track (km)
-  const halfNS = (isSar ? 70 : 34) * grow; // along-track (km) -- SAR strip is long
+  const halfEW = (crossKm / 2) * grow;
+  const halfNS = (alongKm / 2) * grow;
   const u = unit(latDeg, lonDeg);
   const lon = (lonDeg * Math.PI) / 180;
   const east: [number, number, number] = [-Math.sin(lon), Math.cos(lon), 0];

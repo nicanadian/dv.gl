@@ -133,16 +133,15 @@ describe("collectFootprintCorners", () => {
   };
 
   it("EO footprint is a compact near-square; SAR is an elongated strip", () => {
-    const eo = extent(collectFootprintCorners(0, 0, "EO", 10, 0));
-    const sar = extent(collectFootprintCorners(0, 0, "SAR", 10, 0));
+    const eo = extent(collectFootprintCorners(0, 0, 60, 60, 10, 0));
+    const sar = extent(collectFootprintCorners(0, 0, 24, 60, 10, 0));
     expect(eo.ns / eo.ew).toBeCloseTo(1, 1); // EO ~ square
-    expect(sar.ns / sar.ew).toBeGreaterThan(2.5); // SAR strip: long in along-track
-    expect(sar.ns).toBeGreaterThan(eo.ns); // strip longer than the EO scene
+    expect(sar.ns / sar.ew).toBeGreaterThan(2); // SAR strip: long in along-track
   });
 
   it("grows with look angle", () => {
-    const near = extent(collectFootprintCorners(0, 0, "EO", 0, 0));
-    const far = extent(collectFootprintCorners(0, 0, "EO", 45, 0));
+    const near = extent(collectFootprintCorners(0, 0, 60, 60, 0, 0));
+    const far = extent(collectFootprintCorners(0, 0, 60, 60, 45, 0));
     expect(far.ew).toBeGreaterThan(near.ew);
   });
 });

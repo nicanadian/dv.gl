@@ -64,25 +64,44 @@ def main() -> None:
     deck = json.loads((run_root / "deck.json").read_text())
     targets = {r["request_id"]: r for r in deck["requests"]}
 
+    # ground footprint dimensions per collect (the sim gives target + look angle, not
+    # a polygon, so size the box from the sensor model): EO frame swath = GSD x the
+    # cross-track detector count (sensors_realistic EO = 12000 px), ~square scene;
+    # SAR = a side-looking stripmap swath (catalog lacks a clean swath number).
+    EO_DETECTOR_PX = 12000
+
+    def footprint_km(sensor, gsd_m):
+        if (sensor or "").upper().startswith("SAR"):
+            return 24.0, 60.0  # cross, along (elongated strip)
+        sw = min(80.0, (gsd_m or 5.0) * EO_DETECTOR_PX / 1000.0)
+        return sw, sw
+
     # 2) join scheduled opportunities to their request targets -> collects
     collects = []
     for op in schedule.get("scheduled", []):
         req = targets.get(op["request_id"])
         if req is None:
             continue
+        # sensor = the SATELLITE's sensor (SAR-xx / EO-xx), not the request's desired
+        # sensor_type (which the scheduler may satisfy with either bus in this fleet).
+        sat = op["satellite_id"]
+        sensor = "SAR" if sat.upper().startswith("SAR") else "EO"
+        cross_km, along_km = footprint_km(sensor, op.get("best_gsd_m"))
         collects.append(
             {
                 "id": op["opportunity_id"],
-                "sat": op["satellite_id"],
+                "sat": sat,
                 "requestId": op["request_id"],
                 "start": op["window_start"],
                 "end": op["window_end"],
                 "targetLatDeg": req["target_lat_deg"],
                 "targetLonDeg": req["target_lon_deg"],
                 "lookAngleDeg": op.get("look_angle_deg"),
-                "sensor": op.get("sensor_type"),
+                "sensor": sensor,
                 "gsdM": op.get("best_gsd_m"),
                 "priority": op.get("priority"),
+                "crossKm": round(cross_km, 2),
+                "alongKm": round(along_km, 2),
             }
         )
     collects.sort(key=lambda c: c["start"])
