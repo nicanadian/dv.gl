@@ -43,6 +43,12 @@ export {
 export { GroundStationsLayer } from "./layers/ground-stations.js";
 export { HeadingLayer } from "./layers/heading.js";
 export {
+  type LabelHit,
+  type LabelsCallback,
+  LabelsLayer,
+  type LabelsLayerOptions,
+} from "./layers/labels.js";
+export {
   type FleetSource,
   SatellitesLayer,
   type SatellitesLayerOptions,

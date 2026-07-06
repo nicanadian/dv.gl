@@ -27,6 +27,8 @@ import {
   FieldOfRegardLayer,
   type GroundStation,
   GroundStationsLayer,
+  type LabelHit,
+  LabelsLayer,
   HeadingLayer,
   parseCollects,
   parseOem,
@@ -82,6 +84,30 @@ async function main(): Promise<void> {
     scene.add(new HeadingLayer({ fleet: sats }));
     scene.add(sats);
 
+    // labels are GPU-silent: the layer emits positions, the HOST renders text
+    const labelsEl = document.getElementById("labels") as HTMLElement;
+    const labelPool: HTMLSpanElement[] = [];
+    const labels = new LabelsLayer({ fleet: sats });
+    labels.onLabels((hits: readonly LabelHit[]) => {
+      hits.forEach((hit, i) => {
+        let el = labelPool[i];
+        if (!el) {
+          el = document.createElement("span");
+          labelsEl.appendChild(el);
+          labelPool[i] = el;
+        }
+        el.textContent = hit.name.split("/").pop() ?? hit.name;
+        el.style.left = `${hit.x * labelsEl.clientWidth + 6}px`;
+        el.style.top = `${hit.y * labelsEl.clientHeight - 7}px`;
+        el.style.display = "block";
+      });
+      for (let i = hits.length; i < labelPool.length; i += 1) {
+        const el = labelPool[i];
+        if (el) el.style.display = "none";
+      }
+    });
+    scene.add(labels);
+
     scene.attachControls(canvas);
     scene.onPick((hit) => {
       pickEl.style.display = hit ? "block" : "none";
@@ -95,7 +121,7 @@ async function main(): Promise<void> {
     scene.clock.play();
     scene.start();
     if (status) {
-      status.textContent = `@dvgl/viewer · ${source.count} sats · ${collects.length} collects · 7 layers`;
+      status.textContent = `@dvgl/viewer · ${source.count} sats · ${collects.length} collects · 8 layers`;
     }
   } catch (e) {
     if (status) status.textContent = `error: ${(e as Error).message}`;

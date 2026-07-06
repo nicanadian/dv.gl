@@ -11,11 +11,16 @@
       #pick { position: fixed; top: 8px; left: 50%; transform: translateX(-50%); z-index: 9;
               color: #eef; font: 13px monospace; padding: 3px 10px; border-radius: 4px;
               background: rgba(20,26,48,0.9); display: none; }
+      /* the HOST renders label text; the LabelsLayer only emits positions */
+      #labels { position: fixed; inset: 0; pointer-events: none; z-index: 8; }
+      #labels span { position: absolute; color: #cfe3ff; font: 11px monospace;
+                     text-shadow: 0 0 3px #000, 0 0 3px #000; white-space: nowrap; }
     </style>
   </head>
   <body>
     <div id="status">loading @dvgl/viewer...</div>
     <div id="pick"></div>
+    <div id="labels"></div>
     <canvas id="view"></canvas>
     <script type="module" src="./src/viewer-demo.ts"></script>
   </body>
