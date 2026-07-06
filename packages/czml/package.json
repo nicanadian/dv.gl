@@ -19,6 +19,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@dvgl/core": "workspace:*"
+    "@dvgl/core": "workspace:*",
+    "@dvgl/frames": "workspace:*"
   }
 }

@@ -79,6 +79,22 @@ describe("parseCzml", () => {
     expect(scene.entities).toHaveLength(0);
     expect(scene.warnings[0]).toMatch(/gs-1: no position/);
   });
+
+  it("parses cartographicDegrees, converting Earth-fixed lon/lat/h to inertial ECI km", () => {
+    // one sample: lon 0, lat 0, height 500 km -> ~6878 km radius; FIXED -> rotated to ECI
+    const carto = {
+      ...SAT,
+      position: {
+        epoch: "2026-07-05T00:00:00Z",
+        referenceFrame: "FIXED",
+        cartographicDegrees: [0, 0, 0, 500000],
+      },
+    };
+    const e = parseCzml([DOC, carto]).entities[0];
+    expect(e?.referenceFrame).toBe("INERTIAL"); // converted from FIXED
+    const r = Math.hypot(e?.positions[0] ?? 0, e?.positions[1] ?? 0, e?.positions[2] ?? 0);
+    expect(r).toBeCloseTo(6878.137, 0); // WGS84 equatorial + 500 km
+  });
 });
 
 describe("exportCzml round trip", () => {

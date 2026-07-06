@@ -29,6 +29,8 @@
  * recorded verbatim on the entity.
  */
 
+import { geodeticToEcef, gmst } from "@dvgl/frames";
+
 export interface CzmlClock {
   readonly startMs: number;
   readonly endMs: number;
@@ -127,11 +129,13 @@ export function parseCzml(input: string | unknown[]): CzmlScene {
       continue;
     }
     const cartesian = pos["cartesian"];
-    if (!Array.isArray(cartesian)) {
-      throw new CzmlError(id, "only sampled position.cartesian is in the subset");
+    const carto = pos["cartographicDegrees"];
+    const samples = Array.isArray(cartesian) ? cartesian : carto;
+    if (!Array.isArray(samples)) {
+      throw new CzmlError(id, "position needs sampled cartesian or cartographicDegrees");
     }
-    if (cartesian.length % 4 !== 0 || cartesian.length === 0) {
-      throw new CzmlError(id, `cartesian length ${cartesian.length} is not quadruples`);
+    if (samples.length % 4 !== 0 || samples.length === 0) {
+      throw new CzmlError(id, `position samples length ${samples.length} is not quadruples`);
     }
     const epochMs = Date.parse(String(pos["epoch"] ?? ""));
     if (Number.isNaN(epochMs)) {
@@ -144,25 +148,55 @@ export function parseCzml(input: string | unknown[]): CzmlScene {
     if (interp !== undefined && interp !== "LINEAR" && interp !== "LAGRANGE") {
       throw new CzmlError(id, `unsupported interpolationAlgorithm "${String(interp)}"`);
     }
-    const n = cartesian.length / 4;
+    // cartographicDegrees (lon/lat/height) is inherently Earth-fixed; convert to ECEF
+    // then rotate to the inertial frame dv.gl renders in (Rz(+gmst) at each sample's
+    // own time) unless the file explicitly marks it INERTIAL.
+    const isCarto = !Array.isArray(cartesian);
+    const inertial = String(pos["referenceFrame"] ?? "FIXED") === "INERTIAL";
+    const n = samples.length / 4;
     const times = new Float64Array(n);
     const positionsKm = new Float32Array(n * 3);
     for (let k = 0; k < n; k += 1) {
-      const t = Number(cartesian[k * 4]);
-      const x = Number(cartesian[k * 4 + 1]);
-      const y = Number(cartesian[k * 4 + 2]);
-      const z = Number(cartesian[k * 4 + 3]);
-      if (![t, x, y, z].every(Number.isFinite)) {
+      const t = Number(samples[k * 4]);
+      const a = Number(samples[k * 4 + 1]);
+      const b = Number(samples[k * 4 + 2]);
+      const c = Number(samples[k * 4 + 3]);
+      if (![t, a, b, c].every(Number.isFinite)) {
         throw new CzmlError(id, `non-finite sample at index ${k}`);
       }
       if (k > 0 && t <= (times[k - 1] ?? 0)) {
         throw new CzmlError(id, `sample times must be strictly increasing (index ${k})`);
       }
       times[k] = t;
-      positionsKm[k * 3] = x / 1000;
-      positionsKm[k * 3 + 1] = y / 1000;
-      positionsKm[k * 3 + 2] = z / 1000;
+      let x: number;
+      let y: number;
+      let z: number;
+      if (isCarto) {
+        // a=lonDeg, b=latDeg, c=heightMeters
+        const [ex, ey, ez] = geodeticToEcef(b, a, c / 1000);
+        if (inertial) {
+          x = ex;
+          y = ey;
+          z = ez;
+        } else {
+          const g = gmst(epochMs + t * 1000);
+          const cg = Math.cos(g);
+          const sg = Math.sin(g);
+          x = cg * ex - sg * ey; // Rz(+gmst): ECEF -> ECI
+          y = sg * ex + cg * ey;
+          z = ez;
+        }
+      } else {
+        x = a / 1000;
+        y = b / 1000;
+        z = c / 1000;
+      }
+      positionsKm[k * 3] = x;
+      positionsKm[k * 3 + 1] = y;
+      positionsKm[k * 3 + 2] = z;
     }
+    // positions are now inertial (ECI) for carto; keep the file's frame for cartesian
+    const outFrame = isCarto ? "INERTIAL" : String(pos["referenceFrame"] ?? "FIXED");
 
     let availabilityMs: [number, number] | undefined;
     if (typeof pkt["availability"] === "string") {
@@ -180,7 +214,7 @@ export function parseCzml(input: string | unknown[]): CzmlScene {
     entities.push({
       id,
       name: String(pkt["name"] ?? id),
-      referenceFrame: String(pos["referenceFrame"] ?? "FIXED"),
+      referenceFrame: outFrame,
       epochMs,
       times,
       positions: positionsKm,
