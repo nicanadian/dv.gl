@@ -137,6 +137,9 @@ importers:
       '@dvgl/core':
         specifier: workspace:*
         version: link:../core
+      '@dvgl/czml':
+        specifier: workspace:*
+        version: link:../czml
       '@dvgl/frames':
         specifier: workspace:*
         version: link:../frames

@@ -28,6 +28,7 @@
   },
   "devDependencies": {
     "@dvgl/core": "workspace:*",
+    "@dvgl/czml": "workspace:*",
     "@dvgl/frames": "workspace:*",
     "@dvgl/orbits": "workspace:*",
     "@dvgl/webgpu": "workspace:*",

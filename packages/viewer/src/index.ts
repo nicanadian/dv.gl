@@ -18,6 +18,12 @@
 // insulated from internal package churn.
 export { MissionClock, type TimelineMark, TimelineMarks } from "@dvgl/core";
 export {
+  type CzmlEntity,
+  type CzmlScene,
+  czmlToSegments,
+  parseCzml,
+} from "@dvgl/czml";
+export {
   accessEvents,
   type Collect,
   EphemerisSource,
