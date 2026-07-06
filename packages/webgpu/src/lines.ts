@@ -27,6 +27,8 @@ struct Camera {
   viewProjRte : mat4x4<f32>,
   eyeHigh     : vec4<f32>,
   eyeLow      : vec4<f32>,
+  // x=cos(gmst), y=sin(gmst), z=spin flag (1=rotate Earth-fixed pos -> world by Rz(+gmst))
+  model       : vec4<f32>,
 };
 
 @group(0) @binding(0) var<uniform> cam : Camera;
@@ -41,7 +43,17 @@ struct VsOut {
 
 @vertex
 fn vs(@builtin(vertex_index) v : u32) -> VsOut {
-  let rel = (posHigh[v].xyz - cam.eyeHigh.xyz) + (posLow[v].xyz - cam.eyeLow.xyz);
+  // optional Earth-fixed spin: Rz(+gmst) applied to BOTH split halves (linear, so the
+  // relative-to-eye cancellation still holds to fp32-of-the-remainder precision).
+  var ph = posHigh[v].xyz;
+  var pl = posLow[v].xyz;
+  if (cam.model.z > 0.5) {
+    let c = cam.model.x;
+    let s = cam.model.y;
+    ph = vec3<f32>(c * ph.x - s * ph.y, s * ph.x + c * ph.y, ph.z);
+    pl = vec3<f32>(c * pl.x - s * pl.y, s * pl.x + c * pl.y, pl.z);
+  }
+  let rel = (ph - cam.eyeHigh.xyz) + (pl - cam.eyeLow.xyz);
   var out : VsOut;
   out.clip = cam.viewProjRte * vec4<f32>(rel, 1.0);
   out.color = colors[v];
@@ -73,7 +85,7 @@ export class LineRenderer {
   private readonly highStage: Float32Array<ArrayBuffer>;
   private readonly lowStage: Float32Array<ArrayBuffer>;
   private readonly colorStage: Float32Array<ArrayBuffer>;
-  private readonly cameraStage = new Float32Array(16 + 4 + 4);
+  private readonly cameraStage = new Float32Array(16 + 4 + 4 + 4);
   private vertexCount = 0;
 
   constructor(device: GPUDevice, opts: LineRendererOptions) {
@@ -160,7 +172,16 @@ export class LineRenderer {
     this.vertexCount = 0;
   }
 
-  updateCamera(viewProjRte: Float32Array, eyeKm: readonly [number, number, number]): void {
+  /**
+   * @param spinGmstRad when given, the vertices are treated as Earth-fixed (ECEF) and
+   * rotated into the world by Rz(+gmst) in-shader — so a static ECEF line buffer spins
+   * with the globe without per-frame CPU rebakes. Omit for world-space segments.
+   */
+  updateCamera(
+    viewProjRte: Float32Array,
+    eyeKm: readonly [number, number, number],
+    spinGmstRad?: number,
+  ): void {
     this.cameraStage.set(viewProjRte, 0);
     for (let i = 0; i < 3; i += 1) {
       const c = eyeKm[i] ?? 0;
@@ -168,6 +189,16 @@ export class LineRenderer {
       this.cameraStage[16 + i] = h;
       this.cameraStage[20 + i] = Math.fround(c - h);
     }
+    if (spinGmstRad === undefined) {
+      this.cameraStage[24] = 1;
+      this.cameraStage[25] = 0;
+      this.cameraStage[26] = 0;
+    } else {
+      this.cameraStage[24] = Math.cos(spinGmstRad);
+      this.cameraStage[25] = Math.sin(spinGmstRad);
+      this.cameraStage[26] = 1;
+    }
+    this.cameraStage[27] = 0;
     this.device.queue.writeBuffer(this.cameraBuf, 0, this.cameraStage);
   }
 

@@ -21,6 +21,7 @@
  * toggling between them -- exactly what a SolidJS <GeometryView> would do.
  */
 import {
+  BasemapLayer,
   CollectsLayer,
   CoverageLayer,
   EphemerisSource,
@@ -31,6 +32,7 @@ import {
   LabelsLayer,
   HeadingLayer,
   Map2DView,
+  parseBasemap,
   parseCollects,
   parseOem,
   SatellitesLayer,
@@ -71,6 +73,8 @@ async function main(): Promise<void> {
     const collectsResp = await fetch("./mission.collects.json");
     const collects = collectsResp.ok ? parseCollects(await collectsResp.json(), source.epochMs) : [];
     const colors = familyColors(source);
+    const basemapResp = await fetch("./basemap-110m.bin");
+    const basemap = basemapResp.ok ? parseBasemap(await basemapResp.arrayBuffer()) : undefined;
 
     // one device, shared by both views (neither owns it, so neither destroys it)
     if (!navigator.gpu) throw new Error("WebGPU unavailable");
@@ -88,6 +92,7 @@ async function main(): Promise<void> {
       sats.setSource(source);
       sats.setColors(colors);
 
+      if (basemap) scene.add(new BasemapLayer(basemap));
       scene.add(new CoverageLayer({ collects }));
       scene.add(new TracksLayer({ source, fleet: sats, mode: "orbit" }));
       scene.add(new FieldOfRegardLayer({ fleet: sats }));
@@ -144,6 +149,7 @@ async function main(): Promise<void> {
       map.setTrackSource(source);
       map.setCollects(collects);
       map.setStations(STATIONS);
+      if (basemap) map.setBasemap(basemap.coastlines, basemap.borders);
       map.clock.play();
       map.start();
       teardown = () => {

@@ -88,6 +88,8 @@ export class Map2DView {
   private readonly collectLines: LineRenderer;
   private readonly coverage: CoverageOverlay;
   private stationPts: PointRenderer | undefined;
+  private basemapLines: LineRenderer | undefined;
+  private basemapSegs = 0;
 
   private readonly grid = new RevisitGrid(N_LAT, N_LON);
   private readonly ageBuf = new Uint8Array(N_LAT * N_LON);
@@ -248,6 +250,48 @@ export class Map2DView {
     }
   }
 
+  /**
+   * Reproject Earth-fixed (ECEF km) coastline/border line-lists to sub-satellite plane
+   * coords, splitting antimeridian-crossing segments so they don't streak across the map.
+   */
+  setBasemap(coastlines?: Float32Array, borders?: Float32Array): void {
+    const src: [Float32Array | undefined, readonly [number, number, number, number]][] = [
+      [coastlines, [0.42, 0.55, 0.72, 0.85]],
+      [borders, [0.35, 0.42, 0.55, 0.6]],
+    ];
+    const totalSegs = (coastlines?.length ?? 0) / 6 + (borders?.length ?? 0) / 6;
+    const pos = new Float32Array(totalSegs * 6);
+    const col = new Float32Array(totalSegs * 8);
+    let seg = 0;
+    for (const [buf, c] of src) {
+      if (!buf) continue;
+      for (let i = 0; i + 6 <= buf.length; i += 6) {
+        const a = ecefToGeodetic(buf[i] ?? 0, buf[i + 1] ?? 0, buf[i + 2] ?? 0);
+        const b = ecefToGeodetic(buf[i + 3] ?? 0, buf[i + 4] ?? 0, buf[i + 5] ?? 0);
+        const ax = a.lonDeg / 90;
+        const bx = b.lonDeg / 90;
+        if (Math.abs(ax - bx) > 2) continue; // antimeridian crossing: drop the streak
+        const p = seg * 6;
+        pos[p] = ax;
+        pos[p + 1] = a.latDeg / 90;
+        pos[p + 3] = bx;
+        pos[p + 4] = b.latDeg / 90;
+        col.set([c[0], c[1], c[2], c[3], c[0], c[1], c[2], c[3]], seg * 8);
+        seg += 1;
+      }
+    }
+    this.basemapSegs = seg;
+    if (seg > 0) {
+      if (!this.basemapLines) {
+        this.basemapLines = new LineRenderer(this.device, {
+          capacity: seg * 2,
+          format: this.format,
+        });
+      }
+      this.basemapLines.setSegments(pos.subarray(0, seg * 6), col.subarray(0, seg * 8), seg);
+    }
+  }
+
   resize(widthPx: number, heightPx: number): void {
     this.canvas.width = Math.max(1, widthPx);
     this.canvas.height = Math.max(1, heightPx);
@@ -332,6 +376,7 @@ export class Map2DView {
       this.pts.updateCamera(vp, EYE0, w, h);
     }
     this.grat.updateCamera(vp, EYE0);
+    if (this.basemapSegs > 0) this.basemapLines?.updateCamera(vp, EYE0);
 
     // ground tracks (reproject the ECEF window to sub-satellite lon/lat)
     const tv = this.updateTracks(minutes, vp);
@@ -366,6 +411,7 @@ export class Map2DView {
       ],
     });
     this.coverage.draw(pass);
+    if (this.basemapSegs > 0) this.basemapLines?.draw(pass);
     this.grat.draw(pass);
     if (tv > 0) this.trackLines.draw(pass);
     this.stationPts?.draw(pass);
