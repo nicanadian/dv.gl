@@ -38,6 +38,9 @@ importers:
       '@dvgl/validate':
         specifier: workspace:*
         version: link:../../packages/validate
+      '@dvgl/viewer':
+        specifier: workspace:*
+        version: link:../../packages/viewer
       '@dvgl/webgpu':
         specifier: workspace:*
         version: link:../../packages/webgpu
@@ -121,6 +124,25 @@ importers:
       satellite.js:
         specifier: ^5.0.0
         version: 5.0.0
+
+  packages/viewer:
+    dependencies:
+      '@dvgl/core':
+        specifier: workspace:*
+        version: link:../core
+      '@dvgl/frames':
+        specifier: workspace:*
+        version: link:../frames
+      '@dvgl/orbits':
+        specifier: workspace:*
+        version: link:../orbits
+      '@dvgl/webgpu':
+        specifier: workspace:*
+        version: link:../webgpu
+    devDependencies:
+      '@webgpu/types':
+        specifier: ^0.1.44
+        version: 0.1.71
 
   packages/webgpu:
     dependencies:

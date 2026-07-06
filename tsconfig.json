@@ -6,6 +6,7 @@
     { "path": "packages/orbits" },
     { "path": "packages/czml" },
     { "path": "packages/webgpu" },
+    { "path": "packages/viewer" },
     { "path": "packages/benchmarks" },
     { "path": "packages/validate" }
   ]

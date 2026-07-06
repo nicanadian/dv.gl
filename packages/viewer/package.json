@@ -1,0 +1,33 @@
+{
+  "name": "@dvgl/viewer",
+  "version": "0.0.0",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@dvgl/core": "workspace:*",
+    "@dvgl/frames": "workspace:*",
+    "@dvgl/orbits": "workspace:*",
+    "@dvgl/webgpu": "workspace:*"
+  },
+  "peerDependencies": {
+    "@webgpu/types": "^0.1.44"
+  },
+  "devDependencies": {
+    "@webgpu/types": "^0.1.44"
+  }
+}

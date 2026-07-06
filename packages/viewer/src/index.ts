@@ -1,0 +1,43 @@
+/*
+ * Copyright 2026 nicanadian
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+/**
+ * @dvgl/viewer -- the embeddable façade. A framework host (SolidJS, Three, plain
+ * DOM) creates a `Scene` on a canvas, adds composable layers, feeds them data, and
+ * drives the lifecycle. Nothing here touches `document`/`window` except the opt-in
+ * `Scene.attachControls(el)`. Parsers/data types live in @dvgl/orbits and are
+ * re-exported here so consumers have one import surface.
+ */
+export { OrbitCamera, type CameraView } from "./camera.js";
+export { Scene, type SceneOptions } from "./scene.js";
+export type { FrameContext, Layer, LayerContext, PickHit } from "./types.js";
+export {
+  type FleetSource,
+  SatellitesLayer,
+  type SatellitesLayerOptions,
+} from "./layers/satellites.js";
+
+// Re-export the stable data surface so consumers import it from one place and are
+// insulated from internal package churn.
+export {
+  type Collect,
+  EphemerisSource,
+  type OemFile,
+  type OemSegment,
+  parseCollects,
+  parseOem,
+  type PropagationSource,
+} from "@dvgl/orbits";
