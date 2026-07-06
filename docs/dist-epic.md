@@ -106,4 +106,20 @@ poisoned upstream/Action can't slip in. dv.gl is hard to weaponize and hard to p
   `satellite.js` only. Tarball verified (LICENSE + dist only). Security floor:
   SHA-pinned Actions, `minimumReleaseAge` cooldown, no install scripts, frozen
   lockfile, `contents:read`.
-- **D3 — pdb-viewer SolidJS spike: NOT STARTED** (viewer thread's lane — coordinate).
+- **D3 — pdb-viewer SolidJS spike: DONE (verified, uncommitted-by-design).** In the pdb
+  repo `viewer/`: `@dvgl/viewer` consumed as a **vendored local tarball**
+  (`viewer/vendor/dvgl-viewer-0.0.0.tgz`, `file:` dep — satellite.js pulled transitively,
+  `@webgpu/types` added as a dev peer). `src/components/geometry/DvglGeometryView.tsx` is a
+  SolidJS component that owns its `<canvas>` via a **ref (no ambient getElementById)**,
+  drives `Scene.create/start/resize/dispose` from `onMount`/`onCleanup`, surfaces labels +
+  picks through the façade **data callbacks into Solid signals** (`<For>`/`<Show>`, never
+  DOM writes), and toggles 3D `Scene` ↔ 2D `Map2DView` on a shared `GPUDevice` to exercise
+  dispose+recreate. Isolated spike entry (`spike-dvgl.html` + `src/spike/dvgl-spike.tsx`, an
+  extra vite rollup input) — NOT wired into the app shell or the Cesium `GeometryView`.
+  Verified: `tsc` clean on spike files, `vite build` bundles the façade + satellite.js
+  (79.8 kB chunk), and a **headless-Chromium WebGPU smoke** (`tests/dvgl-spike-smoke.mjs`)
+  renders the real 24-sat / 139-collect fleet in both 3D and 2D and survives the toggle with
+  zero page errors. Left uncommitted in the pdb working tree (throwaway spike, viewer thread's
+  lane). Remaining open detail: the git-SHA channel for a monorepo **subpackage** (the local
+  tarball path is proven; the SHA path needs a repo-layout decision — publish a built subtree,
+  or a separate dist repo).
