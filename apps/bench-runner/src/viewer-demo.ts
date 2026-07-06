@@ -15,12 +15,31 @@
  */
 
 /**
- * Minimal external-style consumer of @dvgl/viewer -- the D1 exit check. It imports
- * ONLY from @dvgl/viewer's public surface, owns its own canvas + fetching, and
- * drives the Scene lifecycle. No dv.gl internals, no ambient element IDs beyond the
- * one canvas the host created -- exactly what a SolidJS <GeometryView> would do.
+ * External-style consumer of @dvgl/viewer -- the D1 exit check. Imports ONLY from
+ * @dvgl/viewer, owns its canvas + fetching, composes the layer stack, and drives the
+ * Scene lifecycle. No dv.gl internals, no ambient element IDs beyond the one canvas.
+ * Exactly what a SolidJS <GeometryView> would do.
  */
-import { EphemerisSource, parseOem, SatellitesLayer, Scene } from "@dvgl/viewer";
+import {
+  CollectsLayer,
+  CoverageLayer,
+  EphemerisSource,
+  FieldOfRegardLayer,
+  type GroundStation,
+  GroundStationsLayer,
+  HeadingLayer,
+  parseCollects,
+  parseOem,
+  SatellitesLayer,
+  Scene,
+} from "@dvgl/viewer";
+
+const STATIONS: GroundStation[] = [
+  { name: "SVALBARD", latDeg: 78.23, lonDeg: 15.4, minElevationDeg: 5 },
+  { name: "FAIRBANKS", latDeg: 64.8, lonDeg: -147.7, minElevationDeg: 5 },
+  { name: "PUNTA ARENAS", latDeg: -53.0, lonDeg: -70.9, minElevationDeg: 5 },
+  { name: "SINGAPORE", latDeg: 1.35, lonDeg: 103.8, minElevationDeg: 5 },
+];
 
 async function main(): Promise<void> {
   const status = document.getElementById("status");
@@ -34,9 +53,9 @@ async function main(): Promise<void> {
   sizeToHost();
 
   try {
-    const resp = await fetch("./mission.oem");
-    if (!resp.ok) throw new Error("mission.oem not found");
-    const source = new EphemerisSource(parseOem(await resp.text()).segments);
+    const source = new EphemerisSource(parseOem(await (await fetch("./mission.oem")).text()).segments);
+    const collectsResp = await fetch("./mission.collects.json");
+    const collects = collectsResp.ok ? parseCollects(await collectsResp.json(), source.epochMs) : [];
 
     const scene = await Scene.create({
       canvas,
@@ -47,12 +66,18 @@ async function main(): Promise<void> {
 
     const sats = new SatellitesLayer({ pointSizePx: 6 });
     sats.setSource(source);
-    // family colours (EO cyan / SAR gold) -- host policy, fed to the layer
     const colors = new Float32Array(source.count * 4);
     source.names.forEach((n, i) => {
       colors.set(/sar/i.test(n) ? [1, 0.78, 0.35, 1] : [0.55, 0.85, 1, 1], i * 4);
     });
     sats.setColors(colors);
+
+    // compose the layer stack (draw order = add order; points on top)
+    scene.add(new CoverageLayer({ collects }));
+    scene.add(new FieldOfRegardLayer({ fleet: sats }));
+    scene.add(new GroundStationsLayer({ fleet: sats, stations: STATIONS }));
+    scene.add(new CollectsLayer({ fleet: sats, collects }));
+    scene.add(new HeadingLayer({ fleet: sats }));
     scene.add(sats);
 
     scene.attachControls(canvas);
@@ -67,7 +92,9 @@ async function main(): Promise<void> {
 
     scene.clock.play();
     scene.start();
-    if (status) status.textContent = `@dvgl/viewer · ${source.count} objects`;
+    if (status) {
+      status.textContent = `@dvgl/viewer · ${source.count} sats · ${collects.length} collects · 6 layers`;
+    }
   } catch (e) {
     if (status) status.textContent = `error: ${(e as Error).message}`;
   }

@@ -14,6 +14,18 @@
  * limitations under the License.
  */
 
+// Re-export the stable data surface so consumers import it from one place and are
+// insulated from internal package churn.
+export {
+  type Collect,
+  EphemerisSource,
+  type GroundStation,
+  type OemFile,
+  type OemSegment,
+  type PropagationSource,
+  parseCollects,
+  parseOem,
+} from "@dvgl/orbits";
 /**
  * @dvgl/viewer -- the embeddable façade. A framework host (SolidJS, Three, plain
  * DOM) creates a `Scene` on a canvas, adds composable layers, feeds them data, and
@@ -21,23 +33,19 @@
  * `Scene.attachControls(el)`. Parsers/data types live in @dvgl/orbits and are
  * re-exported here so consumers have one import surface.
  */
-export { OrbitCamera, type CameraView } from "./camera.js";
-export { Scene, type SceneOptions } from "./scene.js";
-export type { FrameContext, Layer, LayerContext, PickHit } from "./types.js";
+export { type CameraView, OrbitCamera } from "./camera.js";
+export { CollectsLayer, type CollectsLayerOptions } from "./layers/collects.js";
+export { CoverageLayer, type CoverageLayerOptions } from "./layers/coverage.js";
+export {
+  FieldOfRegardLayer,
+  type FieldOfRegardLayerOptions,
+} from "./layers/field-of-regard.js";
+export { GroundStationsLayer } from "./layers/ground-stations.js";
+export { HeadingLayer } from "./layers/heading.js";
 export {
   type FleetSource,
   SatellitesLayer,
   type SatellitesLayerOptions,
 } from "./layers/satellites.js";
-
-// Re-export the stable data surface so consumers import it from one place and are
-// insulated from internal package churn.
-export {
-  type Collect,
-  EphemerisSource,
-  type OemFile,
-  type OemSegment,
-  parseCollects,
-  parseOem,
-  type PropagationSource,
-} from "@dvgl/orbits";
+export { Scene, type SceneOptions } from "./scene.js";
+export type { Fleet, FrameContext, Layer, LayerContext, PickHit } from "./types.js";

@@ -13,6 +13,7 @@ export default defineConfig({
         composed: "composed.html",
         cleansheet: "cleansheet.html",
         explore: "explore.html",
+        viewer: "viewer.html",
         numerics: "numerics.html",
       },
     },

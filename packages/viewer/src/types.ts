@@ -62,3 +62,19 @@ export interface PickHit {
   readonly index: number;
   readonly name?: string;
 }
+
+/**
+ * Live fleet state that dependent layers (tracks, stations, field of regard,
+ * collects) read each frame -- the SatellitesLayer is the source of truth. All
+ * arrays are stride-packed in catalog order and refreshed by the fleet's update().
+ */
+export interface Fleet {
+  readonly count: number;
+  readonly names: readonly string[] | undefined;
+  /** Current world/TEME positions, km, stride 3. */
+  readonly positions: Float32Array | undefined;
+  /** Unit along-track velocity directions (finite difference), stride 3. */
+  readonly velocities: Float32Array | undefined;
+  /** Per-object RGBA (stride 4); alpha 0 means filtered out. */
+  readonly colors: Float32Array | undefined;
+}

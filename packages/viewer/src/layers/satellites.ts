@@ -21,7 +21,7 @@
  * GPU buffers and the pick encoding.
  */
 import { decodePickedIndex, PointRenderer } from "@dvgl/webgpu";
-import type { FrameContext, Layer, LayerContext } from "../types.js";
+import type { Fleet, FrameContext, Layer, LayerContext } from "../types.js";
 
 /** Minimal data contract: evaluate `count` objects' positions at a scene time. */
 export interface FleetSource {
@@ -34,12 +34,15 @@ export interface SatellitesLayerOptions {
   readonly pointSizePx?: number;
 }
 
-export class SatellitesLayer implements Layer {
+export class SatellitesLayer implements Layer, Fleet {
   private ctx?: LayerContext;
   private renderer: PointRenderer | undefined;
   private source?: FleetSource;
-  private positions?: Float32Array;
-  private colors?: Float32Array;
+  private posBuf?: Float32Array;
+  private prevPos?: Float32Array;
+  private velBuf?: Float32Array;
+  private prevMin = Number.NaN;
+  private colorBuf?: Float32Array;
   private readonly pointSizePx: number;
 
   constructor(opts: SatellitesLayerOptions = {}) {
@@ -49,13 +52,16 @@ export class SatellitesLayer implements Layer {
   /** Set (or replace) the fleet data source; rebuilds GPU buffers for its count. */
   setSource(source: FleetSource): void {
     this.source = source;
-    this.positions = new Float32Array(source.count * 3);
+    this.posBuf = new Float32Array(source.count * 3);
+    this.prevPos = new Float32Array(source.count * 3);
+    this.velBuf = new Float32Array(source.count * 3);
+    this.prevMin = Number.NaN;
     if (this.ctx) this.rebuild();
   }
 
   /** Per-object RGBA colours (stride 4). Alpha 0 hides an object. */
   setColors(colors: Float32Array): void {
-    this.colors = colors;
+    this.colorBuf = colors;
     this.renderer?.setColors(colors);
   }
 
@@ -65,9 +71,15 @@ export class SatellitesLayer implements Layer {
   get names(): readonly string[] | undefined {
     return this.source?.names;
   }
-  /** Latest propagated positions (world/TEME km, stride 3) -- for other layers. */
-  get latestPositions(): Float32Array | undefined {
-    return this.positions;
+  // --- Fleet: live state other layers read each frame ---
+  get positions(): Float32Array | undefined {
+    return this.posBuf;
+  }
+  get velocities(): Float32Array | undefined {
+    return this.velBuf;
+  }
+  get colors(): Float32Array | undefined {
+    return this.colorBuf;
   }
 
   init(ctx: LayerContext): void {
@@ -84,13 +96,28 @@ export class SatellitesLayer implements Layer {
       pointSizePx: this.pointSizePx,
       ...(this.ctx.pickFormat ? { pickFormat: this.ctx.pickFormat } : {}),
     });
-    if (this.colors) this.renderer.setColors(this.colors);
+    if (this.colorBuf) this.renderer.setColors(this.colorBuf);
   }
 
   update(frame: FrameContext): void {
-    if (!this.source || !this.renderer || !this.positions) return;
-    this.source.propagateInto(frame.timeSec / 60, this.positions);
-    this.renderer.updatePositions(this.positions, this.source.count);
+    if (!this.source || !this.renderer || !this.posBuf) return;
+    const minutes = frame.timeSec / 60;
+    this.source.propagateInto(minutes, this.posBuf);
+    // finite-difference along-track velocity direction (for tracks/heading/FoR)
+    if (this.prevPos && this.velBuf && Number.isFinite(this.prevMin) && minutes !== this.prevMin) {
+      for (let k = 0; k < this.source.count; k += 1) {
+        const dx = (this.posBuf[k * 3] ?? 0) - (this.prevPos[k * 3] ?? 0);
+        const dy = (this.posBuf[k * 3 + 1] ?? 0) - (this.prevPos[k * 3 + 1] ?? 0);
+        const dz = (this.posBuf[k * 3 + 2] ?? 0) - (this.prevPos[k * 3 + 2] ?? 0);
+        const l = Math.hypot(dx, dy, dz) || 1;
+        this.velBuf[k * 3] = dx / l;
+        this.velBuf[k * 3 + 1] = dy / l;
+        this.velBuf[k * 3 + 2] = dz / l;
+      }
+    }
+    if (this.prevPos) this.prevPos.set(this.posBuf.subarray(0, this.source.count * 3));
+    this.prevMin = minutes;
+    this.renderer.updatePositions(this.posBuf, this.source.count);
     this.renderer.updateCamera(frame.viewProjRte, frame.eyeKm, frame.width, frame.height);
   }
 
