@@ -33,7 +33,7 @@ import {
 import {
   catalogEpochMs,
   type Collect,
-  collectGroundRing,
+  collectFootprintCorners,
   collectState,
   collectTargetEcef,
   elevationDeg,
@@ -464,8 +464,8 @@ async function main(): Promise<void> {
     const collectsBox = document.getElementById("collects") as HTMLInputElement;
     const COLLECT_RING_SEG = 20;
     const COLLECT_CAP = 128; // max collects drawn at once (state-windowed below)
-    const COLLECT_RADIUS_KM = 230; // viz box radius (a real scene is smaller; not to scale)
-    const COLLECT_CAP_RAD = COLLECT_RADIUS_KM / 6371.0088;
+    const COVERAGE_STAMP_KM = 90; // coverage cell radius a completed collect lights up
+    const COLLECT_CAP_RAD = COVERAGE_STAMP_KM / 6371.0088;
     const collectFill = new TriRenderer(device, {
       capacity: COLLECT_CAP * COLLECT_RING_SEG * 3,
       format,
@@ -492,7 +492,7 @@ async function main(): Promise<void> {
         const idxByName = new Map<string, number>();
         source.names?.forEach((n, i) => idxByName.set(n.split("/").pop() ?? n, i));
         collectRings = collects.map((c) =>
-          collectGroundRing(c.targetLatDeg, c.targetLonDeg, COLLECT_RADIUS_KM, COLLECT_RING_SEG, 5),
+          collectFootprintCorners(c.targetLatDeg, c.targetLonDeg, c.sensor, c.lookAngleDeg, 5),
         );
         collectCenters = collects.map((c) => collectTargetEcef(c.targetLatDeg, c.targetLonDeg, 5));
         collectSatIdx = collects.map((c) => idxByName.get(c.sat) ?? -1);

@@ -14,7 +14,12 @@
  * limitations under the License.
  */
 import { describe, expect, it } from "vitest";
-import { collectGroundRing, collectState, parseCollects } from "./collects.js";
+import {
+  collectFootprintCorners,
+  collectGroundRing,
+  collectState,
+  parseCollects,
+} from "./collects.js";
 
 const EPOCH_MS = Date.parse("2026-06-15T00:00:00Z");
 
@@ -106,5 +111,38 @@ describe("collectGroundRing", () => {
       // central angle from the target direction (+x) ~ radius/R
       expect(Math.acos((p[0] ?? 0) / r)).toBeCloseTo(50 / R, 4);
     }
+  });
+});
+
+describe("collectFootprintCorners", () => {
+  const extent = (corners: Float32Array): { ew: number; ns: number } => {
+    // target (0,0) -> +x axis; east ~ +y, north ~ +z
+    let yMin = Infinity;
+    let yMax = -Infinity;
+    let zMin = Infinity;
+    let zMax = -Infinity;
+    for (let i = 0; i < 4; i += 1) {
+      const y = corners[i * 3 + 1] ?? 0;
+      const z = corners[i * 3 + 2] ?? 0;
+      yMin = Math.min(yMin, y);
+      yMax = Math.max(yMax, y);
+      zMin = Math.min(zMin, z);
+      zMax = Math.max(zMax, z);
+    }
+    return { ew: yMax - yMin, ns: zMax - zMin };
+  };
+
+  it("EO footprint is a compact near-square; SAR is an elongated strip", () => {
+    const eo = extent(collectFootprintCorners(0, 0, "EO", 10, 0));
+    const sar = extent(collectFootprintCorners(0, 0, "SAR", 10, 0));
+    expect(eo.ns / eo.ew).toBeCloseTo(1, 1); // EO ~ square
+    expect(sar.ns / sar.ew).toBeGreaterThan(2.5); // SAR strip: long in along-track
+    expect(sar.ns).toBeGreaterThan(eo.ns); // strip longer than the EO scene
+  });
+
+  it("grows with look angle", () => {
+    const near = extent(collectFootprintCorners(0, 0, "EO", 0, 0));
+    const far = extent(collectFootprintCorners(0, 0, "EO", 45, 0));
+    expect(far.ew).toBeGreaterThan(near.ew);
   });
 });

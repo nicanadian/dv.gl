@@ -170,3 +170,54 @@ export function collectTargetEcef(
   const r = EARTH_R_KM + bumpKm;
   return [u[0] * r, u[1] * r, u[2] * r];
 }
+
+/**
+ * A sensor-shaped footprint rectangle (4 ECEF corners, km, lifted `bumpKm`) at the
+ * target, oriented to local east/north. Shape differs by sensor so EO and SAR read
+ * apart: EO ~ a compact near-square scene; SAR ~ an elongated side-looking strip.
+ * Sizes grow modestly with look angle (a slanted look covers more ground). These
+ * are viz-nominal dimensions -- the sim gives target + look angle, not a polygon.
+ */
+export function collectFootprintCorners(
+  latDeg: number,
+  lonDeg: number,
+  sensor: string | undefined,
+  lookAngleDeg = 0,
+  bumpKm = 4,
+): Float32Array {
+  const isSar = (sensor ?? "").toUpperCase().startsWith("SAR");
+  const grow = 1 + Math.min(1, Math.abs(lookAngleDeg) / 45); // slant stretch
+  const halfEW = (isSar ? 18 : 34) * grow; // cross-track (km)
+  const halfNS = (isSar ? 70 : 34) * grow; // along-track (km) -- SAR strip is long
+  const u = unit(latDeg, lonDeg);
+  const lon = (lonDeg * Math.PI) / 180;
+  const east: [number, number, number] = [-Math.sin(lon), Math.cos(lon), 0];
+  const north: [number, number, number] = [
+    u[1] * east[2] - u[2] * east[1],
+    u[2] * east[0] - u[0] * east[2],
+    u[0] * east[1] - u[1] * east[0],
+  ];
+  const rad = EARTH_R_KM + bumpKm;
+  const out = new Float32Array(4 * 3);
+  const signs = [
+    [-1, -1],
+    [1, -1],
+    [1, 1],
+    [-1, 1],
+  ];
+  for (let i = 0; i < 4; i += 1) {
+    const de = ((signs[i]?.[0] ?? 0) * halfEW) / EARTH_R_KM;
+    const dn = ((signs[i]?.[1] ?? 0) * halfNS) / EARTH_R_KM;
+    let x = u[0] + de * east[0] + dn * north[0];
+    let y = u[1] + de * east[1] + dn * north[1];
+    let z = u[2] + de * east[2] + dn * north[2];
+    const l = Math.hypot(x, y, z) || 1;
+    x /= l;
+    y /= l;
+    z /= l;
+    out[i * 3] = x * rad;
+    out[i * 3 + 1] = y * rad;
+    out[i * 3 + 2] = z * rad;
+  }
+  return out;
+}
