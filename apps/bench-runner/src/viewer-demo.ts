@@ -152,10 +152,22 @@ async function main(): Promise<void> {
       map.setCollects(collects);
       map.setStations(STATIONS);
       if (basemap) map.setBasemap(basemap.coastlines, basemap.borders);
+      const unpick = map.onPick((hit) => {
+        pickEl.style.display = hit ? "block" : "none";
+        if (hit) pickEl.textContent = hit.name ?? `object ${hit.index}`;
+      });
+      const onMove = (e: PointerEvent): void => {
+        const d = canvas.width / (canvas.clientWidth || 1);
+        map.pickAt(e.offsetX * d, e.offsetY * d);
+      };
+      canvas.addEventListener("pointermove", onMove);
       map.clock.play();
       map.start();
       teardown = () => {
+        unpick();
+        canvas.removeEventListener("pointermove", onMove);
         map.dispose();
+        pickEl.style.display = "none";
       };
       if (status) {
         status.textContent = `@dvgl/viewer · 2D map · ${source.count} sats · ${collects.length} collects`;

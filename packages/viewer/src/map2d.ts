@@ -37,6 +37,7 @@ import {
 import { CoverageOverlay, LineRenderer, PointRenderer, TriRenderer } from "@dvgl/webgpu";
 import type { FleetSource } from "./layers/satellites.js";
 import type { WindowSource } from "./layers/tracks.js";
+import type { PickHit } from "./types.js";
 
 export interface Map2DViewOptions {
   readonly canvas: HTMLCanvasElement;
@@ -123,6 +124,11 @@ export class Map2DView {
   private lastT = 0;
   private running = false;
   private disposed = false;
+
+  private readonly pickCbs = new Set<(hit: PickHit | null) => void>();
+  private pickX = -1;
+  private pickY = -1;
+  private pickPending = false;
 
   private constructor(opts: Map2DViewOptions, device: GPUDevice, ownsDevice: boolean) {
     this.canvas = opts.canvas;
@@ -292,6 +298,21 @@ export class Map2DView {
     }
   }
 
+  /** Subscribe to picks (nearest sub-satellite dot under the cursor, or null). */
+  onPick(cb: (hit: PickHit | null) => void): () => void {
+    this.pickCbs.add(cb);
+    return () => {
+      this.pickCbs.delete(cb);
+    };
+  }
+
+  /** Queue a pick at a device-pixel coordinate; result arrives via onPick next frame. */
+  pickAt(xDevicePx: number, yDevicePx: number): void {
+    this.pickX = Math.round(xDevicePx);
+    this.pickY = Math.round(yDevicePx);
+    this.pickPending = true;
+  }
+
   resize(widthPx: number, heightPx: number): void {
     this.canvas.width = Math.max(1, widthPx);
     this.canvas.height = Math.max(1, heightPx);
@@ -375,6 +396,37 @@ export class Map2DView {
       this.pts.updatePositions(plane, count);
       this.pts.updateCamera(vp, EYE0, w, h);
     }
+
+    // C1: resolve a queued nearest-dot pick against the plane coords just projected
+    if (this.pickPending && this.planePos && count > 0) {
+      this.pickPending = false;
+      const asp = w / h;
+      const syp = Math.min(0.95, 0.475 * asp);
+      const sxp = syp / asp;
+      let best = -1;
+      let bestD2 = 16 * 16; // device-px hit radius squared
+      const colors = this.colors;
+      for (let k = 0; k < count; k += 1) {
+        if (colors && (colors[k * 4 + 3] ?? 1) === 0) continue;
+        const plx = this.planePos[k * 3] ?? 1e12;
+        if (plx > 1e11) continue;
+        const ply = this.planePos[k * 3 + 1] ?? 0;
+        const sxk = (sxp * plx * 0.5 + 0.5) * w;
+        const syk = (1 - (syp * ply * 0.5 + 0.5)) * h;
+        const dx = sxk - this.pickX;
+        const dy = syk - this.pickY;
+        const d2 = dx * dx + dy * dy;
+        if (d2 < bestD2) {
+          bestD2 = d2;
+          best = k;
+        }
+      }
+      const names = this.fleet?.names;
+      const hit: PickHit | null =
+        best >= 0 ? { index: best, ...(names?.[best] ? { name: names[best] } : {}) } : null;
+      for (const cb of this.pickCbs) cb(hit);
+    }
+
     this.grat.updateCamera(vp, EYE0);
     if (this.basemapSegs > 0) this.basemapLines?.updateCamera(vp, EYE0);
 
