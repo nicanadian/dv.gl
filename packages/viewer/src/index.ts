@@ -58,5 +58,6 @@ export {
   type TracksLayerOptions,
   type WindowSource,
 } from "./layers/tracks.js";
+export { Map2DView, type Map2DViewOptions } from "./map2d.js";
 export { Scene, type SceneOptions } from "./scene.js";
 export type { Fleet, FrameContext, Layer, LayerContext, PickHit } from "./types.js";

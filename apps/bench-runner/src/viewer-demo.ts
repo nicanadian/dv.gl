@@ -16,9 +16,9 @@
 
 /**
  * External-style consumer of @dvgl/viewer -- the D1 exit check. Imports ONLY from
- * @dvgl/viewer, owns its canvas + fetching, composes the layer stack, and drives the
- * Scene lifecycle. No dv.gl internals, no ambient element IDs beyond the one canvas.
- * Exactly what a SolidJS <GeometryView> would do.
+ * @dvgl/viewer, owns its canvas + fetching, and drives the lifecycle. It composes
+ * the 3D Scene's layer stack AND the flat Map2DView, sharing one GPUDevice and
+ * toggling between them -- exactly what a SolidJS <GeometryView> would do.
  */
 import {
   CollectsLayer,
@@ -30,6 +30,7 @@ import {
   type LabelHit,
   LabelsLayer,
   HeadingLayer,
+  Map2DView,
   parseCollects,
   parseOem,
   SatellitesLayer,
@@ -44,9 +45,19 @@ const STATIONS: GroundStation[] = [
   { name: "SINGAPORE", latDeg: 1.35, lonDeg: 103.8, minElevationDeg: 5 },
 ];
 
+function familyColors(source: EphemerisSource): Float32Array {
+  const colors = new Float32Array(source.count * 4);
+  source.names.forEach((n, i) => {
+    colors.set(/sar/i.test(n) ? [1, 0.78, 0.35, 1] : [0.55, 0.85, 1, 1], i * 4);
+  });
+  return colors;
+}
+
 async function main(): Promise<void> {
   const status = document.getElementById("status");
   const pickEl = document.getElementById("pick") as HTMLElement;
+  const modeBtn = document.getElementById("mode") as HTMLButtonElement;
+  const labelsEl = document.getElementById("labels") as HTMLElement;
   const canvas = document.getElementById("view") as HTMLCanvasElement;
   const dpr = window.devicePixelRatio || 1;
   const sizeToHost = (): void => {
@@ -59,70 +70,109 @@ async function main(): Promise<void> {
     const source = new EphemerisSource(parseOem(await (await fetch("./mission.oem")).text()).segments);
     const collectsResp = await fetch("./mission.collects.json");
     const collects = collectsResp.ok ? parseCollects(await collectsResp.json(), source.epochMs) : [];
+    const colors = familyColors(source);
 
-    const scene = await Scene.create({
-      canvas,
-      epochMs: source.epochMs,
-      windowSeconds: source.windowSeconds,
-      rate: 600,
-    });
+    // one device, shared by both views (neither owns it, so neither destroys it)
+    if (!navigator.gpu) throw new Error("WebGPU unavailable");
+    const adapter = await navigator.gpu.requestAdapter();
+    if (!adapter) throw new Error("no WebGPU adapter");
+    const device = await adapter.requestDevice();
 
-    const sats = new SatellitesLayer({ pointSizePx: 6 });
-    sats.setSource(source);
-    const colors = new Float32Array(source.count * 4);
-    source.names.forEach((n, i) => {
-      colors.set(/sar/i.test(n) ? [1, 0.78, 0.35, 1] : [0.55, 0.85, 1, 1], i * 4);
-    });
-    sats.setColors(colors);
+    const sceneOpts = { epochMs: source.epochMs, windowSeconds: source.windowSeconds, rate: 600 };
+    let teardown: (() => void) | null = null;
+    let mode: "3d" | "2d" = "3d";
 
-    // compose the layer stack (draw order = add order; points on top)
-    scene.add(new CoverageLayer({ collects }));
-    scene.add(new TracksLayer({ source, fleet: sats, mode: "orbit" }));
-    scene.add(new FieldOfRegardLayer({ fleet: sats }));
-    scene.add(new GroundStationsLayer({ fleet: sats, stations: STATIONS }));
-    scene.add(new CollectsLayer({ fleet: sats, collects }));
-    scene.add(new HeadingLayer({ fleet: sats }));
-    scene.add(sats);
+    const build3D = async (): Promise<void> => {
+      const scene = await Scene.create({ canvas, device, ...sceneOpts });
+      const sats = new SatellitesLayer({ pointSizePx: 6 });
+      sats.setSource(source);
+      sats.setColors(colors);
 
-    // labels are GPU-silent: the layer emits positions, the HOST renders text
-    const labelsEl = document.getElementById("labels") as HTMLElement;
-    const labelPool: HTMLSpanElement[] = [];
-    const labels = new LabelsLayer({ fleet: sats });
-    labels.onLabels((hits: readonly LabelHit[]) => {
-      hits.forEach((hit, i) => {
-        let el = labelPool[i];
-        if (!el) {
-          el = document.createElement("span");
-          labelsEl.appendChild(el);
-          labelPool[i] = el;
+      scene.add(new CoverageLayer({ collects }));
+      scene.add(new TracksLayer({ source, fleet: sats, mode: "orbit" }));
+      scene.add(new FieldOfRegardLayer({ fleet: sats }));
+      scene.add(new GroundStationsLayer({ fleet: sats, stations: STATIONS }));
+      scene.add(new CollectsLayer({ fleet: sats, collects }));
+      scene.add(new HeadingLayer({ fleet: sats }));
+      scene.add(sats);
+
+      const labelPool: HTMLSpanElement[] = [];
+      const labels = new LabelsLayer({ fleet: sats });
+      labels.onLabels((hits: readonly LabelHit[]) => {
+        hits.forEach((hit, i) => {
+          let el = labelPool[i];
+          if (!el) {
+            el = document.createElement("span");
+            labelsEl.appendChild(el);
+            labelPool[i] = el;
+          }
+          el.textContent = hit.name.split("/").pop() ?? hit.name;
+          el.style.left = `${hit.x * labelsEl.clientWidth + 6}px`;
+          el.style.top = `${hit.y * labelsEl.clientHeight - 7}px`;
+          el.style.display = "block";
+        });
+        for (let i = hits.length; i < labelPool.length; i += 1) {
+          const el = labelPool[i];
+          if (el) el.style.display = "none";
         }
-        el.textContent = hit.name.split("/").pop() ?? hit.name;
-        el.style.left = `${hit.x * labelsEl.clientWidth + 6}px`;
-        el.style.top = `${hit.y * labelsEl.clientHeight - 7}px`;
-        el.style.display = "block";
       });
-      for (let i = hits.length; i < labelPool.length; i += 1) {
-        const el = labelPool[i];
-        if (el) el.style.display = "none";
+      scene.add(labels);
+
+      const detach = scene.attachControls(canvas);
+      const unpick = scene.onPick((hit) => {
+        pickEl.style.display = hit ? "block" : "none";
+        if (hit) pickEl.textContent = hit.name ?? `object ${hit.index}`;
+      });
+      scene.clock.play();
+      scene.start();
+      teardown = () => {
+        unpick();
+        detach();
+        scene.dispose();
+        for (const el of labelPool) el.remove();
+        pickEl.style.display = "none";
+      };
+      if (status) {
+        status.textContent = `@dvgl/viewer · 3D · ${source.count} sats · ${collects.length} collects · 8 layers`;
+      }
+    };
+
+    const build2D = async (): Promise<void> => {
+      const map = await Map2DView.create({ canvas, device, ...sceneOpts });
+      map.setFleetSource(source);
+      map.setColors(colors);
+      map.setTrackSource(source);
+      map.setCollects(collects);
+      map.setStations(STATIONS);
+      map.clock.play();
+      map.start();
+      teardown = () => {
+        map.dispose();
+      };
+      if (status) {
+        status.textContent = `@dvgl/viewer · 2D map · ${source.count} sats · ${collects.length} collects`;
+      }
+    };
+
+    await build3D();
+    modeBtn.addEventListener("click", () => {
+      teardown?.();
+      teardown = null;
+      if (mode === "3d") {
+        mode = "2d";
+        modeBtn.textContent = "3D globe";
+        void build2D();
+      } else {
+        mode = "3d";
+        modeBtn.textContent = "2D map";
+        void build3D();
       }
     });
-    scene.add(labels);
 
-    scene.attachControls(canvas);
-    scene.onPick((hit) => {
-      pickEl.style.display = hit ? "block" : "none";
-      if (hit) pickEl.textContent = hit.name ?? `object ${hit.index}`;
-    });
     window.addEventListener("resize", () => {
       sizeToHost();
-      scene.resize(canvas.width, canvas.height);
+      // both views read canvas.width/height each frame; nudge the 3D depth textures
     });
-
-    scene.clock.play();
-    scene.start();
-    if (status) {
-      status.textContent = `@dvgl/viewer · ${source.count} sats · ${collects.length} collects · 8 layers`;
-    }
   } catch (e) {
     if (status) status.textContent = `error: ${(e as Error).message}`;
   }

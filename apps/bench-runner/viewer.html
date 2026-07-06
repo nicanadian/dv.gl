@@ -8,6 +8,9 @@
       /* the HOST owns this element; the Scene never reaches for it by id */
       #view { width: 100vw; height: 100vh; display: block; touch-action: none; }
       #status { position: fixed; top: 8px; left: 8px; color: #9f9; font: 13px monospace; z-index: 9; }
+      #mode { position: fixed; top: 8px; right: 8px; z-index: 9; font: 12px monospace;
+              color: #cfe3ff; background: rgba(20,26,48,0.9); border: 1px solid #3a4a70;
+              border-radius: 4px; padding: 4px 10px; cursor: pointer; }
       #pick { position: fixed; top: 8px; left: 50%; transform: translateX(-50%); z-index: 9;
               color: #eef; font: 13px monospace; padding: 3px 10px; border-radius: 4px;
               background: rgba(20,26,48,0.9); display: none; }
@@ -19,6 +22,7 @@
   </head>
   <body>
     <div id="status">loading @dvgl/viewer...</div>
+    <button id="mode">2D map</button>
     <div id="pick"></div>
     <div id="labels"></div>
     <canvas id="view"></canvas>
