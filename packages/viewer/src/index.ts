@@ -47,5 +47,10 @@ export {
   SatellitesLayer,
   type SatellitesLayerOptions,
 } from "./layers/satellites.js";
+export {
+  TracksLayer,
+  type TracksLayerOptions,
+  type WindowSource,
+} from "./layers/tracks.js";
 export { Scene, type SceneOptions } from "./scene.js";
 export type { Fleet, FrameContext, Layer, LayerContext, PickHit } from "./types.js";

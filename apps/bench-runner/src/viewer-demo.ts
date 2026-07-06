@@ -32,6 +32,7 @@ import {
   parseOem,
   SatellitesLayer,
   Scene,
+  TracksLayer,
 } from "@dvgl/viewer";
 
 const STATIONS: GroundStation[] = [
@@ -74,6 +75,7 @@ async function main(): Promise<void> {
 
     // compose the layer stack (draw order = add order; points on top)
     scene.add(new CoverageLayer({ collects }));
+    scene.add(new TracksLayer({ source, fleet: sats, mode: "orbit" }));
     scene.add(new FieldOfRegardLayer({ fleet: sats }));
     scene.add(new GroundStationsLayer({ fleet: sats, stations: STATIONS }));
     scene.add(new CollectsLayer({ fleet: sats, collects }));
@@ -93,7 +95,7 @@ async function main(): Promise<void> {
     scene.clock.play();
     scene.start();
     if (status) {
-      status.textContent = `@dvgl/viewer · ${source.count} sats · ${collects.length} collects · 6 layers`;
+      status.textContent = `@dvgl/viewer · ${source.count} sats · ${collects.length} collects · 7 layers`;
     }
   } catch (e) {
     if (status) status.textContent = `error: ${(e as Error).message}`;
