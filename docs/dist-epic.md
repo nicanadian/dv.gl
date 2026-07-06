@@ -90,3 +90,20 @@ downstream uptake. With a **git-SHA dep** there is *no publish token and no regi
 with **no install scripts** our package can't execute code on `npm install`; with the
 **`files` allowlist** no secret ever ships; with **SHA-pinned Actions + cooldown** a
 poisoned upstream/Action can't slip in. dv.gl is hard to weaponize and hard to poison.
+
+---
+
+## Status (2026-07-06)
+
+- **D1 — façade: DONE.** `@dvgl/viewer` `Scene` core + all composable layers
+  (`SatellitesLayer`, `HeadingLayer`, `FieldOfRegardLayer`, `GroundStationsLayer`,
+  `CoverageLayer`, `CollectsLayer`, `TracksLayer`, `LabelsLayer`) + the `Map2DView`
+  peer view. DOM-free; labels/picks surface as data callbacks. `viewer.html` renders
+  the whole stack through the public API only.
+- **D2 — safe artifact: DONE.** tsup-bundled self-contained `dist` (inlines `@dvgl/*`,
+  externalizes `satellite.js`, ambient `@webgpu/types` peer; one self-contained
+  `index.d.ts`). `tsconfig.build.json` (maps off), `sideEffects:false`, runtime deps =
+  `satellite.js` only. Tarball verified (LICENSE + dist only). Security floor:
+  SHA-pinned Actions, `minimumReleaseAge` cooldown, no install scripts, frozen
+  lockfile, `contents:read`.
+- **D3 — pdb-viewer SolidJS spike: NOT STARTED** (viewer thread's lane — coordinate).
