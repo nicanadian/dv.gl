@@ -1,3 +1,10 @@
 packages:
   - "packages/*"
   - "apps/*"
+
+# Supply-chain hygiene: a mechanical cooldown so a freshly-published (and possibly
+# compromised) dependency version can't be pulled in until it has been public for a
+# few days. Frozen-lockfile installs (CI) are unaffected — this only gates new
+# resolutions (pnpm add / update). Dependency lifecycle scripts stay default-denied
+# by pnpm 10 (no package here needs one), so nothing runs code on install.
+minimumReleaseAge: 4320
