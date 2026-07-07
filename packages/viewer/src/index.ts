@@ -59,6 +59,7 @@ export {
   LabelsLayer,
   type LabelsLayerOptions,
 } from "./layers/labels.js";
+export { MosaicEarthLayer, type MosaicEarthLayerOptions } from "./layers/mosaic-earth.js";
 export {
   type FleetSource,
   SatellitesLayer,
