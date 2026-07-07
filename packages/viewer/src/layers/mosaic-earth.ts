@@ -288,6 +288,28 @@ export class MosaicEarthLayer implements Layer {
     return this.facetCenters.length;
   }
 
+  /** Per-facet unit centers (ECI-fixed dirs), for a host to compute a data field. */
+  get facetCenters_(): readonly [number, number, number][] {
+    return this.facetCenters;
+  }
+
+  /**
+   * A stand-in coverage/heat field for the data-substrate demo (until wired to live
+   * FoR/coverage): a plausible LEO/SSO revisit pattern — higher toward the poles, with
+   * low-frequency structure. Length = facetCount, values 0..1.
+   */
+  demoCoverageField(): Float32Array {
+    const out = new Float32Array(this.facetCenters.length);
+    for (let k = 0; k < this.facetCenters.length; k += 1) {
+      const c = this.facetCenters[k] as [number, number, number];
+      const absLat = Math.abs(Math.asin(Math.max(-1, Math.min(1, c[2])))) / (Math.PI / 2);
+      const band = 0.35 + 0.65 * absLat; // SSO/polar revisit bias
+      const v = band * (0.7 + 0.3 * reliefProxy(c));
+      out[k] = Math.max(0, Math.min(1, v));
+    }
+    return out;
+  }
+
   update(frame: FrameContext): void {
     if (!this.renderer) return;
     this.epochMs = frame.epochMs;
