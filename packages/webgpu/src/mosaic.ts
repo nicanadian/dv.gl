@@ -33,7 +33,7 @@ struct Camera {
   viewProjRte : mat4x4<f32>,
   eyeHigh     : vec4<f32>,
   eyeLow      : vec4<f32>,
-  params      : vec4<f32>, // gmst, timeSec, mode(0=cartographic,1=data), _
+  params      : vec4<f32>, // gmst, timeSec, mode(0=cartographic,1=data,2=direct), opacity
 };
 struct Style {
   sun          : vec4<f32>, // xyz inertial sun dir
@@ -157,7 +157,7 @@ fn fs(in : VsOut) -> @location(0) vec4<f32> {
   let rim = pow(1.0 - max(dot(sN, viewDir), 0.0), st.limb.w);
   col += st.limb.rgb * rim;
 
-  return vec4<f32>(col, 1.0);
+  return vec4<f32>(col, cam.params.w); // opacity: 1 opaque; <1 for LOD crossfade
 }
 `;
 
@@ -168,6 +168,8 @@ export interface MosaicEarthRendererOptions {
   readonly vertices: Float32Array<ArrayBuffer>;
   /** Facet count (pos count / 6). */
   readonly facetCount: number;
+  /** When true: alpha-blend + no depth write (for LOD crossfade over an opaque base). */
+  readonly blend?: boolean;
 }
 
 const STYLE_FLOATS = 4 * 7 + 4 * 6 + 4 * 6; // sun..oceanDeep(7 vec4) + 2 ramps(6 vec4 each)
@@ -264,11 +266,31 @@ export class MosaicEarthRenderer {
           },
         ],
       },
-      fragment: { module, entryPoint: "fs", targets: [{ format: opts.format }] },
+      fragment: {
+        module,
+        entryPoint: "fs",
+        targets: [
+          {
+            format: opts.format,
+            ...(opts.blend
+              ? {
+                  blend: {
+                    color: { srcFactor: "src-alpha", dstFactor: "one-minus-src-alpha" },
+                    alpha: { srcFactor: "one", dstFactor: "one-minus-src-alpha" },
+                  },
+                }
+              : {}),
+          },
+        ],
+      },
       // cullMode none: robust to per-cube-face winding; the closed opaque sphere +
       // depth test still hides the far hemisphere.
       primitive: { topology: "triangle-list", cullMode: "none" },
-      depthStencil: { format: opts.depthFormat, depthWriteEnabled: true, depthCompare: "less" },
+      depthStencil: {
+        format: opts.depthFormat,
+        depthWriteEnabled: !opts.blend,
+        depthCompare: "less",
+      },
     });
 
     this.cameraBuf = device.createBuffer({
@@ -338,6 +360,7 @@ export class MosaicEarthRenderer {
     sunUnit: readonly [number, number, number],
     timeSec = 0,
     mode: number = this.colorMode,
+    opacity = 1,
   ): void {
     this.cameraStage.set(viewProjRte, 0);
     for (let i = 0; i < 3; i += 1) {
@@ -349,6 +372,7 @@ export class MosaicEarthRenderer {
     this.cameraStage[24] = gmstRad;
     this.cameraStage[25] = timeSec;
     this.cameraStage[26] = mode;
+    this.cameraStage[27] = opacity;
     this.device.queue.writeBuffer(this.cameraBuf, 0, this.cameraStage);
     this.styleStage[0] = sunUnit[0] ?? 0;
     this.styleStage[1] = sunUnit[1] ?? 0;

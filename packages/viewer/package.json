@@ -21,6 +21,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "d3-geo-voronoi": "^2.1.0",
     "h3-js": "^4.5.0",
     "satellite.js": "^5.0.0"
   },
