@@ -84,9 +84,11 @@ export class BasemapLayer implements Layer {
     this.coast = opts.coastlines;
     this.borders = opts.borders;
     this.land = opts.land;
-    this.coastCol = opts.coastColor ?? [0.42, 0.55, 0.72, 0.85];
-    this.borderCol = opts.borderColor ?? [0.35, 0.42, 0.55, 0.6];
-    this.landCol = opts.landColor ?? [0.24, 0.44, 0.3, 1];
+    // high-contrast defaults so coastlines/borders read clearly over the filled land:
+    // coast = crisp light cyan (land/ocean edge), border = warm amber (distinct hue).
+    this.coastCol = opts.coastColor ?? [0.65, 0.92, 1.0, 0.95];
+    this.borderCol = opts.borderColor ?? [1.0, 0.72, 0.32, 0.85];
+    this.landCol = opts.landColor ?? [0.19, 0.36, 0.26, 1];
   }
 
   init(ctx: LayerContext): void {
