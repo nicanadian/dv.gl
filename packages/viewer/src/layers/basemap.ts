@@ -18,7 +18,9 @@
  * Coastlines + country borders on the globe, so a pass is legible ("where is this?").
  * The vectors are Earth-fixed (ECEF km, baked from Natural Earth 110m); the layer draws
  * them with LineRenderer's in-shader GMST spin so a static buffer rotates with the globe
- * — no per-frame CPU rebake. Depth-tested against the Earth mesh, so far-side lines hide.
+ * — no per-frame CPU rebake. Land fill + coast/border lines all use the analytic horizon
+ * cull (not the depth buffer), so lines drape on top of the filled land on the near side
+ * and the far hemisphere is hidden at the limb.
  * Host owns fetching (parseBasemap), consistent with the façade's data-in contract.
  */
 import { LineRenderer, TriRenderer } from "@dvgl/webgpu";
@@ -103,6 +105,7 @@ export class BasemapLayer implements Layer {
         capacity: verts,
         format: ctx.format,
         depthFormat: ctx.depthFormat,
+        horizonCull: true, // drape on top of the filled land, cut at the limb
       });
       this.coastR.setSegments(this.coast, fill(verts, this.coastCol), verts / 2);
     }
@@ -112,6 +115,7 @@ export class BasemapLayer implements Layer {
         capacity: verts,
         format: ctx.format,
         depthFormat: ctx.depthFormat,
+        horizonCull: true,
       });
       this.borderR.setSegments(this.borders, fill(verts, this.borderCol), verts / 2);
     }

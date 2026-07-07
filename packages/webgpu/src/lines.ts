@@ -39,6 +39,7 @@ struct Camera {
 struct VsOut {
   @builtin(position) clip : vec4<f32>,
   @location(0) color : vec4<f32>,
+  @location(1) world : vec3<f32>,
 };
 
 @vertex
@@ -57,11 +58,22 @@ fn vs(@builtin(vertex_index) v : u32) -> VsOut {
   var out : VsOut;
   out.clip = cam.viewProjRte * vec4<f32>(rel, 1.0);
   out.color = colors[v];
+  out.world = ph + pl;
   return out;
 }
 
 @fragment
 fn fs(in : VsOut) -> @location(0) vec4<f32> {
+  // horizon cull (model.w): discard fragments on the far side of the globe, so a
+  // surface-draped line (e.g. coastlines over filled land) sits on top on the near
+  // side without depth-testing against the Earth mesh, yet the far hemisphere is
+  // still hidden. R = 6371 km -> R^2 = 40589641.
+  if (cam.model.w > 0.5) {
+    let eyeAbs = cam.eyeHigh.xyz + cam.eyeLow.xyz;
+    if (dot(in.world, eyeAbs) < 40589641.0) {
+      discard;
+    }
+  }
   return vec4<f32>(in.color.rgb * in.color.a, in.color.a);
 }
 `;
@@ -71,6 +83,14 @@ export interface LineRendererOptions {
   readonly capacity: number;
   readonly format: GPUTextureFormat;
   readonly depthFormat?: GPUTextureFormat;
+  /**
+   * When true, the globe is occluded by an analytic horizon cull (discard far-side
+   * fragments) instead of the depth buffer, and the pipeline stops depth-testing —
+   * so a surface-draped line (coastlines over filled land) always sits on top on the
+   * near side and cuts at the limb. Omit for world-space lines that should hide
+   * behind the globe (tracks, access lines).
+   */
+  readonly horizonCull?: boolean;
 }
 
 export class LineRenderer {
@@ -86,12 +106,14 @@ export class LineRenderer {
   private readonly lowStage: Float32Array<ArrayBuffer>;
   private readonly colorStage: Float32Array<ArrayBuffer>;
   private readonly cameraStage = new Float32Array(16 + 4 + 4 + 4);
+  private readonly horizonCull: boolean;
   private vertexCount = 0;
 
   constructor(device: GPUDevice, opts: LineRendererOptions) {
     if (opts.capacity <= 0) throw new Error("capacity must be positive");
     this.device = device;
     this.capacity = opts.capacity;
+    this.horizonCull = opts.horizonCull ?? false;
     this.highStage = new Float32Array(opts.capacity * 4);
     this.lowStage = new Float32Array(opts.capacity * 4);
     this.colorStage = new Float32Array(opts.capacity * 4);
@@ -119,7 +141,9 @@ export class LineRenderer {
             depthStencil: {
               format: opts.depthFormat,
               depthWriteEnabled: false,
-              depthCompare: "less-equal" as const,
+              // horizon-cull lines don't depth-test (they drape on top of the globe);
+              // world-space lines depth-test so far-side geometry hides behind it
+              depthCompare: (this.horizonCull ? "always" : "less-equal") as GPUCompareFunction,
             },
           }
         : {}),
@@ -198,7 +222,7 @@ export class LineRenderer {
       this.cameraStage[25] = Math.sin(spinGmstRad);
       this.cameraStage[26] = 1;
     }
-    this.cameraStage[27] = 0;
+    this.cameraStage[27] = this.horizonCull ? 1 : 0;
     this.device.queue.writeBuffer(this.cameraBuf, 0, this.cameraStage);
   }
 
