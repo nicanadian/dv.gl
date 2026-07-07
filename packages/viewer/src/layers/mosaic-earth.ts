@@ -96,6 +96,7 @@ export class MosaicEarthLayer implements Layer {
   private facetData: Float32Array | undefined; // vec2(landMask, scalar) per facet
   private epochMs = 0;
   private dataMode = false;
+  private visible = true;
 
   constructor(opts: MosaicEarthLayerOptions = {}) {
     this.n = Math.max(8, opts.facesPerEdge ?? 56);
@@ -283,6 +284,11 @@ export class MosaicEarthLayer implements Layer {
     this.dataMode = false;
   }
 
+  /** Toggle draw (lets several earth substrates coexist and swap without a rebuild). */
+  setVisible(v: boolean): void {
+    this.visible = v;
+  }
+
   /** Facet count (so a host can size a data field). */
   get facetCount(): number {
     return this.facetCenters.length;
@@ -325,7 +331,7 @@ export class MosaicEarthLayer implements Layer {
   }
 
   draw(pass: GPURenderPassEncoder): void {
-    this.renderer?.draw(pass);
+    if (this.visible) this.renderer?.draw(pass);
   }
 
   dispose(): void {

@@ -54,6 +54,10 @@ export {
 export { GroundStationsLayer } from "./layers/ground-stations.js";
 export { HeadingLayer } from "./layers/heading.js";
 export {
+  HexMosaicEarthLayer,
+  type HexMosaicEarthLayerOptions,
+} from "./layers/hex-mosaic-earth.js";
+export {
   type LabelHit,
   type LabelsCallback,
   LabelsLayer,

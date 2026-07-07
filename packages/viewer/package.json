@@ -21,6 +21,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "h3-js": "^4.5.0",
     "satellite.js": "^5.0.0"
   },
   "peerDependencies": {
