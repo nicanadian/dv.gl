@@ -118,8 +118,9 @@ export class BasemapLayer implements Layer {
   }
 
   update(frame: FrameContext): void {
-    // in-shader Earth-fixed spin: the ECEF buffers rotate by Rz(+gmst) with the globe
-    this.landR?.updateCamera(frame.viewProjRte, frame.eyeKm, frame.gmstRad);
+    // in-shader Earth-fixed spin: the ECEF buffers rotate by Rz(+gmst) with the globe.
+    // land is a draped fill -> horizon-cull it (no depth test) so it isn't chord-culled.
+    this.landR?.updateCamera(frame.viewProjRte, frame.eyeKm, frame.gmstRad, true);
     this.coastR?.updateCamera(frame.viewProjRte, frame.eyeKm, frame.gmstRad);
     this.borderR?.updateCamera(frame.viewProjRte, frame.eyeKm, frame.gmstRad);
   }

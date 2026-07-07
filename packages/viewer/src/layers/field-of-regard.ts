@@ -166,7 +166,8 @@ export class FieldOfRegardLayer implements Layer {
       out(near, seg - 1, far, seg - 1, cr, cg, cb);
     }
     this.fill.setTriangles(triPos, triCol, ft / 3);
-    this.fill.updateCamera(frame.viewProjRte, frame.eyeKm);
+    // draped swath fill -> horizon-cull (no depth test) so wide flat tris aren't chord-culled
+    this.fill.updateCamera(frame.viewProjRte, frame.eyeKm, undefined, true);
     this.lines.setSegments(segPos, segCol, fs);
     this.lines.updateCamera(frame.viewProjRte, frame.eyeKm);
   }

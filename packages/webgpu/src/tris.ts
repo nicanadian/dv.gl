@@ -41,6 +41,7 @@ struct Camera {
 struct VsOut {
   @builtin(position) clip : vec4<f32>,
   @location(0) color : vec4<f32>,
+  @location(1) world : vec3<f32>,
 };
 
 @vertex
@@ -57,11 +58,21 @@ fn vs(@builtin(vertex_index) v : u32) -> VsOut {
   var out : VsOut;
   out.clip = cam.viewProjRte * vec4<f32>(rel, 1.0);
   out.color = colors[v];
+  out.world = ph + pl;
   return out;
 }
 
 @fragment
 fn fs(in : VsOut) -> @location(0) vec4<f32> {
+  // horizon cull (model.w): discard fragments on the far side of the globe, so a
+  // flat draped fill isn't occluded by the Earth mesh (no depth test) yet the far
+  // hemisphere is still hidden. R = 6371 km -> R^2 = 40589641.
+  if (cam.model.w > 0.5) {
+    let eyeAbs = cam.eyeHigh.xyz + cam.eyeLow.xyz;
+    if (dot(in.world, eyeAbs) < 40589641.0) {
+      discard;
+    }
+  }
   return vec4<f32>(in.color.rgb * in.color.a, in.color.a);
 }
 `;
@@ -120,7 +131,9 @@ export class TriRenderer {
             depthStencil: {
               format: opts.depthFormat,
               depthWriteEnabled: false,
-              depthCompare: "less-equal" as const,
+              // draped fills use the horizon cull (not the depth buffer) for globe
+              // occlusion, so a flat triangle chording below the surface still renders
+              depthCompare: "always" as const,
             },
           }
         : {}),
@@ -176,11 +189,15 @@ export class TriRenderer {
    * @param spinGmstRad when given, vertices are treated as Earth-fixed (ECEF) and
    * rotated into the world by Rz(+gmst) in-shader — so a static ECEF triangle buffer
    * (e.g. filled land) spins with the globe. Omit for world-space triangles.
+   * @param horizonCull when true, fragments on the far side of the globe are discarded
+   * (globe occlusion without a depth test) — use for draped fills on the 3D globe; omit
+   * for the 2D map.
    */
   updateCamera(
     viewProjRte: Float32Array,
     eyeKm: readonly [number, number, number],
     spinGmstRad?: number,
+    horizonCull = false,
   ): void {
     this.cameraStage.set(viewProjRte, 0);
     for (let i = 0; i < 3; i += 1) {
@@ -198,7 +215,7 @@ export class TriRenderer {
       this.cameraStage[25] = Math.sin(spinGmstRad);
       this.cameraStage[26] = 1;
     }
-    this.cameraStage[27] = 0;
+    this.cameraStage[27] = horizonCull ? 1 : 0;
     this.device.queue.writeBuffer(this.cameraBuf, 0, this.cameraStage);
   }
 

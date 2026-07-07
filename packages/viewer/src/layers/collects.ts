@@ -209,7 +209,8 @@ export class CollectsLayer implements Layer {
       }
     }
     this.fill.setTriangles(triPos, triCol, ft / 3);
-    this.fill.updateCamera(frame.viewProjRte, frame.eyeKm);
+    // draped footprint fill -> horizon-cull (no depth test) so it isn't chord-culled
+    this.fill.updateCamera(frame.viewProjRte, frame.eyeKm, undefined, true);
     this.lines.setSegments(segPos, segCol, sv);
     this.lines.updateCamera(frame.viewProjRte, frame.eyeKm);
   }
