@@ -85,8 +85,8 @@ export class BasemapLayer implements Layer {
     this.borders = opts.borders;
     this.land = opts.land;
     // high-contrast defaults so coastlines/borders read clearly over the filled land:
-    // coast = crisp light cyan (land/ocean edge), border = near-black (subtle, distinct).
-    this.coastCol = opts.coastColor ?? [0.65, 0.92, 1.0, 0.95];
+    // coast = muted steel blue (land/ocean edge), border = near-black (subtle, distinct).
+    this.coastCol = opts.coastColor ?? [0.3, 0.5, 0.68, 0.9];
     this.borderCol = opts.borderColor ?? [0.06, 0.07, 0.09, 0.9];
     this.landCol = opts.landColor ?? [0.19, 0.36, 0.26, 1];
   }
