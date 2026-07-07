@@ -67,7 +67,45 @@ function bakeLines(path) {
   return Float32Array.from(out);
 }
 
-// ---- land fill (earcut-triangulated polygons) --------------------------------
+// ---- land fill (earcut-triangulated polygons, sphere-tessellated) ------------
+const MAX_EDGE_DEG = 3; // subdivide so triangles hug the sphere (chord dip < lift)
+const LAND_LIFT_KM = 3;
+
+function edgeDeg(a, b) {
+  return Math.hypot(a[0] - b[0], a[1] - b[1]);
+}
+
+/**
+ * Emit a triangle as ECEF, recursively splitting its longest edge until every edge
+ * is short — a flat triangle spanning a wide arc chords *below* the globe and gets
+ * depth-culled, so we tessellate it to drape on the surface.
+ */
+function emitTri(a, b, c, out, depth) {
+  const ab = edgeDeg(a, b);
+  const bc = edgeDeg(b, c);
+  const ca = edgeDeg(c, a);
+  if (Math.max(ab, bc, ca) <= MAX_EDGE_DEG || depth >= 7) {
+    for (const v of [a, b, c]) {
+      const [x, y, z] = geodeticToEcef(v[1], v[0], LAND_LIFT_KM);
+      out.push(x, y, z);
+    }
+    return;
+  }
+  if (ab >= bc && ab >= ca) {
+    const m = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+    emitTri(a, m, c, out, depth + 1);
+    emitTri(m, b, c, out, depth + 1);
+  } else if (bc >= ca) {
+    const m = [(b[0] + c[0]) / 2, (b[1] + c[1]) / 2];
+    emitTri(a, b, m, out, depth + 1);
+    emitTri(a, m, c, out, depth + 1);
+  } else {
+    const m = [(c[0] + a[0]) / 2, (c[1] + a[1]) / 2];
+    emitTri(a, b, m, out, depth + 1);
+    emitTri(m, b, c, out, depth + 1);
+  }
+}
+
 function emitPolygon(rings, out) {
   const flat = [];
   const holes = [];
@@ -77,9 +115,11 @@ function emitPolygon(rings, out) {
   });
   if (flat.length < 6) return;
   const idx = earcut(flat, holes.length ? holes : null, 2);
-  for (const k of idx) {
-    const [x, y, z] = geodeticToEcef(flat[k * 2 + 1], flat[k * 2], 1);
-    out.push(x, y, z);
+  for (let t = 0; t < idx.length; t += 3) {
+    const a = [flat[idx[t] * 2], flat[idx[t] * 2 + 1]];
+    const b = [flat[idx[t + 1] * 2], flat[idx[t + 1] * 2 + 1]];
+    const c = [flat[idx[t + 2] * 2], flat[idx[t + 2] * 2 + 1]];
+    emitTri(a, b, c, out, 0);
   }
 }
 
