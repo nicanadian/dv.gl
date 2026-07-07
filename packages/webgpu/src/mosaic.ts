@@ -49,7 +49,8 @@ struct Style {
 
 @group(0) @binding(0) var<uniform> cam : Camera;
 @group(0) @binding(1) var<uniform> st  : Style;
-@group(0) @binding(2) var<storage, read> facetData : array<vec2<f32>>;
+@group(0) @binding(2) var<storage, read> facetData  : array<vec2<f32>>;
+@group(0) @binding(3) var<storage, read> facetColor : array<vec4<f32>>;
 
 struct VsOut {
   @builtin(position) clip : vec4<f32>,
@@ -110,18 +111,22 @@ fn fs(in : VsOut) -> @location(0) vec4<f32> {
   var land = st.landRamp;
   var data = st.dataRamp;
   var base : vec3<f32>;
-  if (isLand) {
-    if (mode > 0.5) {
-      base = rampSample(&data, scalar);           // data-substrate choropleth
-    } else {
-      base = rampSample(&land, scalar);           // hypsometric relief
-    }
+  if (mode > 1.5) {
+    // direct per-facet RGB (CPU-computed palette color, already jittered) — low-poly
+    base = facetColor[in.facet].rgb;
   } else {
-    base = mix(st.oceanShallow.rgb, st.oceanDeep.rgb, scalar);
+    if (isLand) {
+      if (mode > 0.5) {
+        base = rampSample(&data, scalar);         // data-substrate choropleth
+      } else {
+        base = rampSample(&land, scalar);         // hypsometric relief
+      }
+    } else {
+      base = mix(st.oceanShallow.rgb, st.oceanDeep.rgb, scalar);
+    }
+    // value-only per-facet jitter (tiles read as "cut", not as false biome/coverage)
+    base *= 1.0 + hash1(in.facet) * st.knobs.x;
   }
-
-  // value-only per-facet jitter (tiles read as "cut", not as false biome/coverage)
-  base *= 1.0 + hash1(in.facet) * st.knobs.x;
 
   // faint faceted-crystal read: flat facet normal vs sun
   let sun = normalize(st.sun.xyz);
@@ -217,12 +222,15 @@ export class MosaicEarthRenderer {
   private readonly cameraBuf: GPUBuffer;
   private readonly styleBuf: GPUBuffer;
   private readonly facetBuf: GPUBuffer;
+  private readonly colorBuf: GPUBuffer;
   private readonly vertexBuf: GPUBuffer;
   private readonly vertexCount: number;
   readonly facetCount: number;
   private readonly cameraStage = new Float32Array(16 + 4 + 4 + 4);
   private readonly styleStage: Float32Array<ArrayBuffer>;
   private readonly facetStage: Float32Array<ArrayBuffer>; // vec2 per facet
+  private readonly colorStage: Float32Array<ArrayBuffer>; // vec4 per facet (direct mode)
+  private colorMode = 0; // 0=cartographic ramp, 1=data ramp, 2=direct facetColor
 
   constructor(device: GPUDevice, opts: MosaicEarthRendererOptions) {
     this.device = device;
@@ -230,6 +238,7 @@ export class MosaicEarthRenderer {
     this.vertexCount = opts.vertices.length / 9;
     this.styleStage = defaultMosaicStyle();
     this.facetStage = new Float32Array(opts.facetCount * 2);
+    this.colorStage = new Float32Array(opts.facetCount * 4);
 
     this.vertexBuf = device.createBuffer({
       size: opts.vertices.byteLength,
@@ -274,8 +283,13 @@ export class MosaicEarthRenderer {
       size: Math.max(16, this.facetStage.byteLength),
       usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
     });
+    this.colorBuf = device.createBuffer({
+      size: Math.max(16, this.colorStage.byteLength),
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+    });
     device.queue.writeBuffer(this.styleBuf, 0, this.styleStage);
     device.queue.writeBuffer(this.facetBuf, 0, this.facetStage);
+    device.queue.writeBuffer(this.colorBuf, 0, this.colorStage);
 
     this.bindGroup = device.createBindGroup({
       layout: this.pipeline.getBindGroupLayout(0),
@@ -283,6 +297,7 @@ export class MosaicEarthRenderer {
         { binding: 0, resource: { buffer: this.cameraBuf } },
         { binding: 1, resource: { buffer: this.styleBuf } },
         { binding: 2, resource: { buffer: this.facetBuf } },
+        { binding: 3, resource: { buffer: this.colorBuf } },
       ],
     });
   }
@@ -305,13 +320,24 @@ export class MosaicEarthRenderer {
     this.device.queue.writeBuffer(this.styleBuf, 0, this.styleStage);
   }
 
+  /**
+   * Per-facet RGBA color for direct mode (low-poly palettes): the shader uses this
+   * verbatim as the base color (still lit by facet-normal + terminator). Also switches
+   * the renderer into direct-color mode. Rewrite to repaint / swap palette live.
+   */
+  setFacetColors(rgba: Float32Array): void {
+    this.colorStage.set(rgba.subarray(0, this.colorStage.length));
+    this.device.queue.writeBuffer(this.colorBuf, 0, this.colorStage);
+    this.colorMode = 2;
+  }
+
   updateCamera(
     viewProjRte: Float32Array,
     eyeKm: readonly [number, number, number],
     gmstRad: number,
     sunUnit: readonly [number, number, number],
     timeSec = 0,
-    dataMode = false,
+    mode: number = this.colorMode,
   ): void {
     this.cameraStage.set(viewProjRte, 0);
     for (let i = 0; i < 3; i += 1) {
@@ -322,7 +348,7 @@ export class MosaicEarthRenderer {
     }
     this.cameraStage[24] = gmstRad;
     this.cameraStage[25] = timeSec;
-    this.cameraStage[26] = dataMode ? 1 : 0;
+    this.cameraStage[26] = mode;
     this.device.queue.writeBuffer(this.cameraBuf, 0, this.cameraStage);
     this.styleStage[0] = sunUnit[0] ?? 0;
     this.styleStage[1] = sunUnit[1] ?? 0;
@@ -342,5 +368,6 @@ export class MosaicEarthRenderer {
     this.cameraBuf.destroy();
     this.styleBuf.destroy();
     this.facetBuf.destroy();
+    this.colorBuf.destroy();
   }
 }

@@ -326,7 +326,7 @@ export class MosaicEarthLayer implements Layer {
       frame.gmstRad,
       sun,
       frame.timeSec,
-      this.dataMode,
+      this.dataMode ? 1 : 0,
     );
   }
 

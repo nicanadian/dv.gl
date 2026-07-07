@@ -253,7 +253,7 @@ export class HexMosaicEarthLayer implements Layer {
       frame.gmstRad,
       sun,
       frame.timeSec,
-      this.dataMode,
+      this.dataMode ? 1 : 0,
     );
     this.edges?.updateCamera(frame.viewProjRte, frame.eyeKm, frame.gmstRad);
   }
