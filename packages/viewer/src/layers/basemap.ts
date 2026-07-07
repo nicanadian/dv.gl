@@ -21,24 +21,32 @@
  * — no per-frame CPU rebake. Depth-tested against the Earth mesh, so far-side lines hide.
  * Host owns fetching (parseBasemap), consistent with the façade's data-in contract.
  */
-import { LineRenderer } from "@dvgl/webgpu";
+import { LineRenderer, TriRenderer } from "@dvgl/webgpu";
 import type { FrameContext, Layer, LayerContext } from "../types.js";
 
 const BASEMAP_MAGIC = 0x44564742; // "DVGB"
 
-/** Parse the baked basemap binary into ECEF-km line-list vertex buffers. */
+/**
+ * Parse the baked basemap binary. v1 = coast + border line-lists; v2 adds a land
+ * triangle-list (filled land). All ECEF km.
+ */
 export function parseBasemap(buf: ArrayBuffer): {
   coastlines: Float32Array;
   borders: Float32Array;
+  land?: Float32Array;
 } {
-  const head = new Uint32Array(buf, 0, 4);
+  const head = new Uint32Array(buf, 0, 5);
   if (head[0] !== BASEMAP_MAGIC) throw new Error("parseBasemap: bad magic");
+  const version = head[1] ?? 1;
   const coastFloats = head[2] ?? 0;
   const borderFloats = head[3] ?? 0;
-  return {
-    coastlines: new Float32Array(buf, 16, coastFloats),
-    borders: new Float32Array(buf, 16 + coastFloats * 4, borderFloats),
-  };
+  const headerBytes = version >= 2 ? 20 : 16;
+  const coastlines = new Float32Array(buf, headerBytes, coastFloats);
+  const borders = new Float32Array(buf, headerBytes + coastFloats * 4, borderFloats);
+  if (version < 2) return { coastlines, borders };
+  const landFloats = head[4] ?? 0;
+  const land = new Float32Array(buf, headerBytes + (coastFloats + borderFloats) * 4, landFloats);
+  return { coastlines, borders, land };
 }
 
 export interface BasemapLayerOptions {
@@ -46,8 +54,11 @@ export interface BasemapLayerOptions {
   readonly coastlines?: Float32Array;
   /** Country-border vertices, ECEF km line-list. */
   readonly borders?: Float32Array;
+  /** Filled-land vertices, ECEF km triangle-list. */
+  readonly land?: Float32Array;
   readonly coastColor?: readonly [number, number, number, number];
   readonly borderColor?: readonly [number, number, number, number];
+  readonly landColor?: readonly [number, number, number, number];
 }
 
 function fill(verts: number, rgba: readonly [number, number, number, number]): Float32Array {
@@ -59,19 +70,33 @@ function fill(verts: number, rgba: readonly [number, number, number, number]): F
 export class BasemapLayer implements Layer {
   private coastR: LineRenderer | undefined;
   private borderR: LineRenderer | undefined;
+  private landR: TriRenderer | undefined;
   private readonly coast: Float32Array | undefined;
   private readonly borders: Float32Array | undefined;
+  private readonly land: Float32Array | undefined;
   private readonly coastCol: readonly [number, number, number, number];
   private readonly borderCol: readonly [number, number, number, number];
+  private readonly landCol: readonly [number, number, number, number];
 
   constructor(opts: BasemapLayerOptions) {
     this.coast = opts.coastlines;
     this.borders = opts.borders;
+    this.land = opts.land;
     this.coastCol = opts.coastColor ?? [0.42, 0.55, 0.72, 0.85];
     this.borderCol = opts.borderColor ?? [0.35, 0.42, 0.55, 0.6];
+    this.landCol = opts.landColor ?? [0.24, 0.44, 0.3, 1];
   }
 
   init(ctx: LayerContext): void {
+    if (this.land && this.land.length >= 9) {
+      const verts = this.land.length / 3;
+      this.landR = new TriRenderer(ctx.device, {
+        capacity: verts,
+        format: ctx.format,
+        depthFormat: ctx.depthFormat,
+      });
+      this.landR.setTriangles(this.land, fill(verts, this.landCol), verts / 3);
+    }
     if (this.coast && this.coast.length >= 6) {
       const verts = this.coast.length / 3;
       this.coastR = new LineRenderer(ctx.device, {
@@ -93,17 +118,20 @@ export class BasemapLayer implements Layer {
   }
 
   update(frame: FrameContext): void {
-    // in-shader Earth-fixed spin: the ECEF buffer rotates by Rz(+gmst) with the globe
+    // in-shader Earth-fixed spin: the ECEF buffers rotate by Rz(+gmst) with the globe
+    this.landR?.updateCamera(frame.viewProjRte, frame.eyeKm, frame.gmstRad);
     this.coastR?.updateCamera(frame.viewProjRte, frame.eyeKm, frame.gmstRad);
     this.borderR?.updateCamera(frame.viewProjRte, frame.eyeKm, frame.gmstRad);
   }
 
   draw(pass: GPURenderPassEncoder): void {
+    this.landR?.draw(pass); // filled land first, coastlines/borders on top
     this.coastR?.draw(pass);
     this.borderR?.draw(pass);
   }
 
   dispose(): void {
+    this.landR = undefined;
     this.coastR = undefined;
     this.borderR = undefined;
   }

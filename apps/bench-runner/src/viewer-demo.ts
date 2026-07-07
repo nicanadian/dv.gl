@@ -158,7 +158,7 @@ async function main(): Promise<void> {
       map.setTrackSource(source);
       map.setCollects(collects);
       map.setStations(STATIONS);
-      if (basemap) map.setBasemap(basemap.coastlines, basemap.borders);
+      if (basemap) map.setBasemap(basemap.coastlines, basemap.borders, basemap.land);
       const unpick = map.onPick((hit) => {
         pickEl.style.display = hit ? "block" : "none";
         if (hit) pickEl.textContent = hit.name ?? `object ${hit.index}`;

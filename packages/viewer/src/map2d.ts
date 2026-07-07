@@ -91,6 +91,8 @@ export class Map2DView {
   private stationPts: PointRenderer | undefined;
   private basemapLines: LineRenderer | undefined;
   private basemapSegs = 0;
+  private basemapTris: TriRenderer | undefined;
+  private basemapTriCount = 0;
 
   private readonly grid = new RevisitGrid(N_LAT, N_LON);
   private readonly ageBuf = new Uint8Array(N_LAT * N_LON);
@@ -257,10 +259,44 @@ export class Map2DView {
   }
 
   /**
-   * Reproject Earth-fixed (ECEF km) coastline/border line-lists to sub-satellite plane
-   * coords, splitting antimeridian-crossing segments so they don't streak across the map.
+   * Reproject Earth-fixed (ECEF km) coastline/border line-lists (and optional filled
+   * land triangles) to sub-satellite plane coords, dropping antimeridian-crossing
+   * primitives so they don't streak across the map.
    */
-  setBasemap(coastlines?: Float32Array, borders?: Float32Array): void {
+  setBasemap(coastlines?: Float32Array, borders?: Float32Array, land?: Float32Array): void {
+    if (land && land.length >= 9) {
+      const triCount = land.length / 9;
+      const tp = new Float32Array(triCount * 9);
+      const tc = new Float32Array(triCount * 12);
+      const col: [number, number, number, number] = [0.24, 0.44, 0.3, 1];
+      let t = 0;
+      for (let i = 0; i + 9 <= land.length; i += 9) {
+        const g0 = ecefToGeodetic(land[i] ?? 0, land[i + 1] ?? 0, land[i + 2] ?? 0);
+        const g1 = ecefToGeodetic(land[i + 3] ?? 0, land[i + 4] ?? 0, land[i + 5] ?? 0);
+        const g2 = ecefToGeodetic(land[i + 6] ?? 0, land[i + 7] ?? 0, land[i + 8] ?? 0);
+        const x0 = g0.lonDeg / 90;
+        const x1 = g1.lonDeg / 90;
+        const x2 = g2.lonDeg / 90;
+        const span = Math.max(x0, x1, x2) - Math.min(x0, x1, x2);
+        if (span > 2) continue; // antimeridian-spanning tri: drop the smear
+        const p = t * 9;
+        tp[p] = x0;
+        tp[p + 1] = g0.latDeg / 90;
+        tp[p + 3] = x1;
+        tp[p + 4] = g1.latDeg / 90;
+        tp[p + 6] = x2;
+        tp[p + 7] = g2.latDeg / 90;
+        for (let v = 0; v < 3; v += 1) tc.set(col, (t * 3 + v) * 4);
+        t += 1;
+      }
+      this.basemapTriCount = t;
+      if (t > 0) {
+        if (!this.basemapTris) {
+          this.basemapTris = new TriRenderer(this.device, { capacity: t * 3, format: this.format });
+        }
+        this.basemapTris.setTriangles(tp.subarray(0, t * 9), tc.subarray(0, t * 12), t);
+      }
+    }
     const src: [Float32Array | undefined, readonly [number, number, number, number]][] = [
       [coastlines, [0.42, 0.55, 0.72, 0.85]],
       [borders, [0.35, 0.42, 0.55, 0.6]],
@@ -428,6 +464,7 @@ export class Map2DView {
     }
 
     this.grat.updateCamera(vp, EYE0);
+    if (this.basemapTriCount > 0) this.basemapTris?.updateCamera(vp, EYE0);
     if (this.basemapSegs > 0) this.basemapLines?.updateCamera(vp, EYE0);
 
     // ground tracks (reproject the ECEF window to sub-satellite lon/lat)
@@ -462,6 +499,7 @@ export class Map2DView {
         },
       ],
     });
+    if (this.basemapTriCount > 0) this.basemapTris?.draw(pass); // filled land, bottom
     this.coverage.draw(pass);
     if (this.basemapSegs > 0) this.basemapLines?.draw(pass);
     this.grat.draw(pass);
