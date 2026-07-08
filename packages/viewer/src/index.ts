@@ -44,6 +44,7 @@ export {
  * re-exported here so consumers have one import surface.
  */
 export { type CameraView, OrbitCamera } from "./camera.js";
+export { AtmosphereLayer, type AtmosphereLayerOptions } from "./layers/atmosphere.js";
 export { BasemapLayer, type BasemapLayerOptions, parseBasemap } from "./layers/basemap.js";
 export { CollectsLayer, type CollectsLayerOptions } from "./layers/collects.js";
 export { CoverageLayer, type CoverageLayerOptions } from "./layers/coverage.js";

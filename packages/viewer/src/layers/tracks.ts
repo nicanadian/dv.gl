@@ -55,6 +55,11 @@ export interface TracksLayerOptions {
   readonly earthFixed?: boolean;
   /** Resample the window when scene time drifts this many minutes. Default 12. */
   readonly recomputeMinutes?: number;
+  /** Scale sample radius from Earth center (>1 raises the orbit) — for a ghost/proposed
+   * maneuver orbit. Default 1. */
+  readonly radialScale?: number;
+  /** Force a single RGBA for all tracks (e.g. a dim ghost) instead of fleet colors. */
+  readonly colorRgba?: readonly [number, number, number, number];
 }
 
 const SURFACE_LIFT_KM = 8;
@@ -72,6 +77,9 @@ export class TracksLayer implements Layer {
   private readonly mode: "orbit" | "ground";
   private readonly earthFixed: boolean;
   private readonly recomputeMin: number;
+  private readonly radialScale: number;
+  private readonly colorRgba: readonly [number, number, number, number] | undefined;
+  private colBuf?: Float32Array;
 
   constructor(opts: TracksLayerOptions) {
     this.source = opts.source;
@@ -80,6 +88,8 @@ export class TracksLayer implements Layer {
     this.mode = opts.mode ?? "orbit";
     this.earthFixed = opts.earthFixed ?? false;
     this.recomputeMin = opts.recomputeMinutes ?? 12;
+    this.radialScale = opts.radialScale ?? 1;
+    this.colorRgba = opts.colorRgba;
   }
 
   init(ctx: LayerContext): void {
@@ -137,11 +147,21 @@ export class TracksLayer implements Layer {
         }
         buf = this.surfBuf;
       }
+      if (this.radialScale !== 1) {
+        const n = count * this.samples * 3;
+        for (let k = 0; k < n; k += 1) buf[k] = (buf[k] ?? 0) * this.radialScale;
+      }
       r.setWindow(buf, count, per);
     }
 
-    // colors follow the live fleet (family filters recolor the tracks too)
-    if (this.fleet?.colors) r.setColors(this.fleet.colors);
+    // colors: a forced ghost color, else follow the live fleet
+    if (this.colorRgba) {
+      if (!this.colBuf) this.colBuf = new Float32Array(count * 4);
+      for (let i = 0; i < count; i += 1) this.colBuf.set(this.colorRgba, i * 4);
+      r.setColors(this.colBuf);
+    } else if (this.fleet?.colors) {
+      r.setColors(this.fleet.colors);
+    }
     r.updateCamera(
       frame.viewProjRte,
       frame.eyeKm,
