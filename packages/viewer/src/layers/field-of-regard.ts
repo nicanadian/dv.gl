@@ -50,6 +50,8 @@ export interface FieldOfRegardLayerOptions {
   readonly fleet: Fleet;
   readonly fillAlpha?: number;
   readonly lineAlpha?: number;
+  /** Override the per-sat swath (e.g. a narrow nadir sensor footprint) for all sats. */
+  readonly swath?: SwathOptions;
 }
 
 export class FieldOfRegardLayer implements Layer {
@@ -63,11 +65,13 @@ export class FieldOfRegardLayer implements Layer {
   private readonly fleet: Fleet;
   private readonly fillAlpha: number;
   private readonly lineAlpha: number;
+  private readonly swathOverride: SwathOptions | undefined;
 
   constructor(opts: FieldOfRegardLayerOptions) {
     this.fleet = opts.fleet;
     this.fillAlpha = opts.fillAlpha ?? 0.13;
     this.lineAlpha = opts.lineAlpha ?? 0.55;
+    this.swathOverride = opts.swath;
   }
 
   init(ctx: LayerContext): void {
@@ -146,7 +150,7 @@ export class FieldOfRegardLayer implements Layer {
       const { near, far } = sensorSwathEdges(
         [x, pos[k * 3 + 1] ?? 0, pos[k * 3 + 2] ?? 0],
         [vx, vy, vz],
-        isSar(names?.[k]) ? SAR : EO,
+        this.swathOverride ?? (isSar(names?.[k]) ? SAR : EO),
       );
       const seg = near.length / 3;
       const cr = colors?.[k * 4] ?? 0.6;
