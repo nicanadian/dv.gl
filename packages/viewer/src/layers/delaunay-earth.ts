@@ -28,12 +28,7 @@
  * cull, so the low-poly surface reads on the near hemisphere only.
  */
 import { sunEciUnit } from "@dvgl/frames";
-import {
-  defaultMosaicStyle,
-  LineRenderer,
-  MosaicEarthRenderer,
-  ThickLineRenderer,
-} from "@dvgl/webgpu";
+import { GeomorphEarthRenderer, ThickLineRenderer } from "@dvgl/webgpu";
 import { geoDelaunay } from "d3-geo-voronoi";
 import type { FrameContext, Layer, LayerContext } from "../types.js";
 
@@ -65,6 +60,33 @@ function dirToEcef(latDeg: number, lonDeg: number, liftKm: number): V3 {
 function hashF(i: number): number {
   const s = Math.sin(i * 12.9898 + 78.233) * 43758.5453;
   return s - Math.floor(s);
+}
+function llToDir(latDeg: number, lonDeg: number): V3 {
+  const la = latDeg * DEG;
+  const lo = lonDeg * DEG;
+  const cl = Math.cos(la);
+  return [cl * Math.cos(lo), cl * Math.sin(lo), Math.sin(la)];
+}
+/** Is unit point p inside the spherical triangle (a,b,c) (either winding)? */
+function inSphTri(p: V3, a: V3, b: V3, c: V3): boolean {
+  const side = (u: V3, v: V3): number =>
+    (u[1] * v[2] - u[2] * v[1]) * p[0] +
+    (u[2] * v[0] - u[0] * v[2]) * p[1] +
+    (u[0] * v[1] - u[1] * v[0]) * p[2];
+  const s1 = side(a, b);
+  const s2 = side(b, c);
+  const s3 = side(c, a);
+  return (s1 >= 0 && s2 >= 0 && s3 >= 0) || (s1 <= 0 && s2 <= 0 && s3 <= 0);
+}
+/** Point where the ray (origin, dir) meets the plane of ECEF triangle (A,B,C). */
+function rayPlane(dir: V3, A: V3, B: V3, C: V3): V3 {
+  const nx = (B[1] - A[1]) * (C[2] - A[2]) - (B[2] - A[2]) * (C[1] - A[1]);
+  const ny = (B[2] - A[2]) * (C[0] - A[0]) - (B[0] - A[0]) * (C[2] - A[2]);
+  const nz = (B[0] - A[0]) * (C[1] - A[1]) - (B[1] - A[1]) * (C[0] - A[0]);
+  const denom = dir[0] * nx + dir[1] * ny + dir[2] * nz;
+  if (Math.abs(denom) < 1e-9) return A;
+  const t = (A[0] * nx + A[1] * ny + A[2] * nz) / denom;
+  return [dir[0] * t, dir[1] * t, dir[2] * t];
 }
 function mix3(a: V3, b: V3, t: number): V3 {
   const u = Math.max(0, Math.min(1, t));
@@ -109,12 +131,6 @@ function mulberry32(seed: number): () => number {
   };
 }
 
-interface Level {
-  fills: MosaicEarthRenderer;
-  wire: LineRenderer;
-  blend: boolean;
-}
-
 export interface DelaunayEarthLayerOptions {
   /** Decoded natural-color raster (e.g. NASA Blue Marble equirect). Required for color. */
   readonly sampler: EquirectSampler;
@@ -133,10 +149,9 @@ export class DelaunayEarthLayer implements Layer {
   private readonly borders: Float32Array | undefined;
   private readonly levelPoints: readonly number[];
   private readonly lift: number;
-  private readonly wireCol: readonly [number, number, number, number];
   private readonly borderCol: readonly [number, number, number, number];
   private readonly borderWidthPx: number;
-  private levels: Level[] = [];
+  private geo: GeomorphEarthRenderer | undefined;
   private borderR: ThickLineRenderer | undefined;
   private grad: Float32Array | undefined; // GWxGH edge-magnitude density field
   private readonly GW = 512;
@@ -149,7 +164,6 @@ export class DelaunayEarthLayer implements Layer {
     this.borders = opts.borders;
     this.levelPoints = opts.levelPoints ?? [5200, 21000];
     this.lift = opts.liftKm ?? 4;
-    this.wireCol = opts.wireColor ?? [0.05, 0.06, 0.09, 0.7];
     this.borderCol = opts.borderColor ?? [0.02, 0.02, 0.03, 0.95];
     this.borderWidthPx = opts.borderWidthPx ?? 2.4;
   }
@@ -221,26 +235,80 @@ export class DelaunayEarthLayer implements Layer {
     return pts;
   }
 
-  private buildLevel(ctx: LayerContext, nPoints: number, seed: number, blend: boolean): Level {
-    const pts = this.generatePoints(nPoints, seed);
-    const tris = geoDelaunay(pts).triangles;
-    const dirs: V3[] = pts.map(([lon, lat]) => dirToEcef(lat, lon, this.lift));
-    const facetCount = tris.length;
-    const verts = new Float32Array(facetCount * 3 * 9);
+  /** Stylized per-facet color: land = real Blue Marble + jitter; ocean = bathymetric. */
+  private facetColor(clon: number, clat: number, f: number): V3 {
+    const rgb = this.sampleRgb(clon, clat);
+    const luma = 0.3 * rgb[0] + 0.59 * rgb[1] + 0.11 * rgb[2];
+    const h = hashF(f);
+    if (rgb[2] > rgb[0] + 0.015 && rgb[2] > rgb[1] + 0.01 && luma < 0.34) {
+      return oceanTint(clon, clat, Math.min(1, luma * 3), h);
+    }
+    const v = 1 + (h - 0.5) * 2 * 0.09;
+    return [rgb[0] * v, rgb[1] * v, rgb[2] * v];
+  }
+
+  /**
+   * Build the geomorph mesh: an L0 point set + its Delaunay (parent mesh), then L1 =
+   * L0 + inserted points. Each L1 vertex remembers where it sits on the parent mesh, so
+   * it can morph from the coarse surface out to the sphere as the camera zooms in.
+   */
+  private buildGeomorph(ctx: LayerContext): void {
+    const n0 = this.levelPoints[0] ?? 5200;
+    const n1 = this.levelPoints[1] ?? 21000;
+    const P0 = this.generatePoints(n0, 12345);
+    const del0 = geoDelaunay(P0);
+    const tris0 = del0.triangles;
+    const dir0: V3[] = P0.map(([lon, lat]) => llToDir(lat, lon));
+    const ecef0: V3[] = P0.map(([lon, lat]) => dirToEcef(lat, lon, this.lift));
+    const incident: number[][] = P0.map(() => []);
+    for (let t = 0; t < tris0.length; t += 1) {
+      const tri = tris0[t] as number[];
+      for (const idx of tri) (incident[idx] as number[]).push(t);
+    }
+    // L1 = L0 + inserted; parent position for each vertex
+    const extra = this.generatePoints(n1, 6789).slice(0, Math.max(0, n1 - P0.length));
+    const P1 = P0.concat(extra);
+    const dir1: V3[] = P1.map(([lon, lat]) => llToDir(lat, lon));
+    const ecef1: V3[] = P1.map(([lon, lat]) => dirToEcef(lat, lon, this.lift));
+    const parent: V3[] = new Array(P1.length);
+    for (let i = 0; i < P1.length; i += 1) {
+      if (i < P0.length) {
+        parent[i] = ecef1[i] as V3;
+        continue;
+      }
+      const [lon, lat] = P1[i] as [number, number];
+      const near = del0.find(lon, lat);
+      const p = dir1[i] as V3;
+      let pp: V3 | undefined;
+      for (const t of incident[near] ?? []) {
+        const tri = tris0[t] as number[];
+        const a = tri[0] as number;
+        const b = tri[1] as number;
+        const c = tri[2] as number;
+        if (inSphTri(p, dir0[a] as V3, dir0[b] as V3, dir0[c] as V3)) {
+          pp = rayPlane(p, ecef0[a] as V3, ecef0[b] as V3, ecef0[c] as V3);
+          break;
+        }
+      }
+      parent[i] = pp ?? (ecef0[near] as V3);
+    }
+    // fine mesh (what we render, with geomorph)
+    const tris1 = geoDelaunay(P1).triangles;
+    const facetCount = tris1.length;
+    const verts = new Float32Array(facetCount * 3 * 13);
     const colors = new Float32Array(facetCount * 4);
-    const fd = new Float32Array(facetCount * 2); // land=1 everywhere -> no ocean glint
-    const seg: number[] = [];
-    const seen = new Set<number>();
+    const bary: [number, number][] = [
+      [1, 0],
+      [0, 1],
+      [0, 0],
+    ];
     let vo = 0;
     for (let f = 0; f < facetCount; f += 1) {
-      const tri = tris[f] as number[];
-      const ia = tri[0] as number;
-      const ib = tri[1] as number;
-      const ic = tri[2] as number;
-      const a = dirs[ia] as V3;
-      const b = dirs[ib] as V3;
-      const c = dirs[ic] as V3;
-      // flat normal (outward)
+      const tri = tris1[f] as number[];
+      const idxs = [tri[0] as number, tri[1] as number, tri[2] as number];
+      const a = ecef1[idxs[0] as number] as V3;
+      const b = ecef1[idxs[1] as number] as V3;
+      const c = ecef1[idxs[2] as number] as V3;
       let nx = (b[1] - a[1]) * (c[2] - a[2]) - (b[2] - a[2]) * (c[1] - a[1]);
       let ny = (b[2] - a[2]) * (c[0] - a[0]) - (b[0] - a[0]) * (c[2] - a[2]);
       let nz = (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]);
@@ -256,96 +324,48 @@ export class DelaunayEarthLayer implements Layer {
         ny = -ny;
         nz = -nz;
       }
-      // color from centroid direction -> lon/lat -> raster
       const cl = Math.hypot(cx, cy, cz) || 1;
       const clat = (Math.asin(Math.max(-1, Math.min(1, cz / cl))) * 180) / Math.PI;
       const clon = (Math.atan2(cy, cx) * 180) / Math.PI;
-      const rgb = this.sampleRgb(clon, clat);
-      const luma = 0.3 * rgb[0] + 0.59 * rgb[1] + 0.11 * rgb[2];
-      const h = hashF(f);
-      let col: V3;
-      if (rgb[2] > rgb[0] + 0.015 && rgb[2] > rgb[1] + 0.01 && luma < 0.34) {
-        // ocean: stylized bathymetric palette + per-facet variety (not flat navy)
-        col = oceanTint(clon, clat, Math.min(1, luma * 3), h);
-      } else {
-        // land: real color + a touch of per-facet value jitter for the low-poly "cut"
-        const v = 1 + (h - 0.5) * 2 * 0.09;
-        col = [rgb[0] * v, rgb[1] * v, rgb[2] * v];
-      }
+      const col = this.facetColor(clon, clat, f);
       colors[f * 4] = Math.max(0, Math.min(1, col[0]));
       colors[f * 4 + 1] = Math.max(0, Math.min(1, col[1]));
       colors[f * 4 + 2] = Math.max(0, Math.min(1, col[2]));
       colors[f * 4 + 3] = 1;
-      fd[f * 2] = 1;
-      for (const v of [a, b, c]) {
-        verts[vo] = v[0];
-        verts[vo + 1] = v[1];
-        verts[vo + 2] = v[2];
-        verts[vo + 3] = nx;
-        verts[vo + 4] = ny;
-        verts[vo + 5] = nz;
-        verts[vo + 6] = f;
-        verts[vo + 7] = 0.5;
-        verts[vo + 8] = 0.5;
-        vo += 9;
-      }
-      // wireframe edges (dedup)
-      const es: [number, number][] = [
-        [ia, ib],
-        [ib, ic],
-        [ic, ia],
-      ];
-      for (const [p, q] of es) {
-        const lo = Math.min(p, q);
-        const hi = Math.max(p, q);
-        const key = lo * dirs.length + hi;
-        if (seen.has(key)) continue;
-        seen.add(key);
-        const pa = dirs[lo] as V3;
-        const pb = dirs[hi] as V3;
-        seg.push(pa[0], pa[1], pa[2], pb[0], pb[1], pb[2]);
+      for (let k = 0; k < 3; k += 1) {
+        const idx = idxs[k] as number;
+        const tp = ecef1[idx] as V3;
+        const pp = parent[idx] as V3;
+        const bb = bary[k] as [number, number];
+        verts[vo] = tp[0];
+        verts[vo + 1] = tp[1];
+        verts[vo + 2] = tp[2];
+        verts[vo + 3] = pp[0];
+        verts[vo + 4] = pp[1];
+        verts[vo + 5] = pp[2];
+        verts[vo + 6] = nx;
+        verts[vo + 7] = ny;
+        verts[vo + 8] = nz;
+        verts[vo + 9] = f;
+        verts[vo + 10] = idx < P0.length ? 0 : 1; // birth level
+        verts[vo + 11] = bb[0];
+        verts[vo + 12] = bb[1];
+        vo += 13;
       }
     }
-
-    const rFills = new MosaicEarthRenderer(ctx.device, {
+    const geo = new GeomorphEarthRenderer(ctx.device, {
       format: ctx.format,
       depthFormat: ctx.depthFormat,
       vertices: verts,
       facetCount,
-      blend,
     });
-    const style = defaultMosaicStyle();
-    style[17] = 0.22; // facetShade (subtle, let the real color read)
-    style[8] = 0.28;
-    style[9] = 0.5;
-    style[10] = 0.72;
-    style[11] = 3.4; // limb a touch softer
-    style[23] = 0.6; // oceanShallow.w -> night-side flatten (keeps the dark side legible)
-    rFills.setStyle(style);
-    rFills.setFacetData(fd);
-    rFills.setFacetColors(colors);
-
-    const segCount = seg.length / 6;
-    const wpos = new Float32Array(seg);
-    const wcol = new Float32Array(segCount * 2 * 4);
-    for (let i = 0; i < segCount * 2; i += 1) wcol.set(this.wireCol, i * 4);
-    const wire = new LineRenderer(ctx.device, {
-      capacity: segCount * 2,
-      format: ctx.format,
-      depthFormat: ctx.depthFormat,
-      horizonCull: true,
-    });
-    wire.setSegments(wpos, wcol, segCount);
-
-    return { fills: rFills, wire, blend };
+    geo.setFacetColors(colors);
+    this.geo = geo;
   }
 
   init(ctx: LayerContext): void {
     this.buildDensity();
-    this.levels = [
-      this.buildLevel(ctx, this.levelPoints[0] ?? 2600, 12345, false), // coarse opaque base
-      this.buildLevel(ctx, this.levelPoints[1] ?? 9000, 6789, true), // fine, fades in
-    ];
+    this.buildGeomorph(ctx);
     if (this.borders && this.borders.length >= 6) {
       const segCount = this.borders.length / 6;
       const bcol = new Float32Array(segCount * 4);
@@ -364,40 +384,11 @@ export class DelaunayEarthLayer implements Layer {
     this.visible = v;
   }
 
-  private fineOpacity(eyeKm: readonly [number, number, number]): number {
-    const alt = Math.hypot(eyeKm[0] ?? 0, eyeKm[1] ?? 0, eyeKm[2] ?? 0) - 6371;
-    const hi = 9000; // fine starts fading in
-    const lo = 3500; // fine fully in
-    return Math.max(0, Math.min(1, (hi - alt) / (hi - lo)));
-  }
-
   update(frame: FrameContext): void {
-    if (!this.levels.length) return;
+    if (!this.geo) return;
     this.epochMs = frame.epochMs;
     const sun = sunEciUnit(this.epochMs + frame.timeSec * 1000);
-    const fine = this.fineOpacity(frame.eyeKm);
-    const coarse = this.levels[0] as Level;
-    const detail = this.levels[1] as Level;
-    coarse.fills.updateCamera(
-      frame.viewProjRte,
-      frame.eyeKm,
-      frame.gmstRad,
-      sun,
-      frame.timeSec,
-      2,
-      1,
-    );
-    coarse.wire.updateCamera(frame.viewProjRte, frame.eyeKm, frame.gmstRad);
-    detail.fills.updateCamera(
-      frame.viewProjRte,
-      frame.eyeKm,
-      frame.gmstRad,
-      sun,
-      frame.timeSec,
-      2,
-      fine,
-    );
-    detail.wire.updateCamera(frame.viewProjRte, frame.eyeKm, frame.gmstRad);
+    this.geo.updateCamera(frame.viewProjRte, frame.eyeKm, frame.gmstRad, sun, 1);
     this.borderR?.updateCamera(
       frame.viewProjRte,
       frame.eyeKm,
@@ -406,25 +397,17 @@ export class DelaunayEarthLayer implements Layer {
       frame.gmstRad,
       true,
     );
-    this.fine = fine;
   }
 
-  private fine = 0;
-
   draw(pass: GPURenderPassEncoder): void {
-    if (!this.visible || !this.levels.length) return;
-    const coarse = this.levels[0] as Level;
-    const detail = this.levels[1] as Level;
-    coarse.fills.draw(pass); // opaque base
-    if (this.fine > 0.01) detail.fills.draw(pass); // blended fine, fades in
-    // wireframe of whichever level dominates; borders always on top
-    (this.fine > 0.5 ? detail.wire : coarse.wire).draw(pass);
+    if (!this.visible || !this.geo) return;
+    this.geo.draw(pass);
     this.borderR?.draw(pass);
   }
 
   dispose(): void {
-    for (const l of this.levels) l.fills.dispose();
-    this.levels = [];
+    this.geo?.dispose();
+    this.geo = undefined;
     this.borderR = undefined;
   }
 }

@@ -21,6 +21,7 @@ export function isWebGpuAvailable(nav: unknown = globalThis.navigator): boolean 
 
 export * from "./coverageOverlay.js";
 export * from "./earth.js";
+export * from "./geomorph.js";
 export * from "./lines.js";
 export * from "./mosaic.js";
 export * from "./orbitTracks.js";
