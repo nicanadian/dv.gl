@@ -267,18 +267,27 @@ export class EarthRenderer {
   }
 
   private gridVisible = true;
+  private surfaceVisible = true;
 
   /** Show/hide the lat/lon graticule (e.g. when a custom earth substrate owns the look). */
   setGridVisible(v: boolean): void {
     this.gridVisible = v;
   }
 
+  /** Show/hide the shaded ellipsoid surface — hide it when a custom opaque earth
+   * substrate (e.g. a low-poly mesh) provides the surface, to avoid z-fighting. */
+  setSurfaceVisible(v: boolean): void {
+    this.surfaceVisible = v;
+  }
+
   draw(pass: GPURenderPassEncoder): void {
-    pass.setPipeline(this.surfacePipeline);
-    pass.setBindGroup(0, this.bindGroup);
-    pass.setVertexBuffer(0, this.vertexBuf);
-    pass.setIndexBuffer(this.indexBuf, "uint32");
-    pass.drawIndexed(this.indexCount);
+    if (this.surfaceVisible) {
+      pass.setPipeline(this.surfacePipeline);
+      pass.setBindGroup(0, this.bindGroup);
+      pass.setVertexBuffer(0, this.vertexBuf);
+      pass.setIndexBuffer(this.indexBuf, "uint32");
+      pass.drawIndexed(this.indexCount);
+    }
     if (!this.gridVisible) return;
     pass.setPipeline(this.gridPipeline);
     pass.setBindGroup(0, this.gridBindGroup);

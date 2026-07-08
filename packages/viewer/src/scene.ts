@@ -157,6 +157,12 @@ export class Scene {
     this.earth.setGridVisible(visible);
   }
 
+  /** Show/hide the base Earth's shaded ellipsoid surface. Hide it when a custom opaque
+   * earth substrate (e.g. a low-poly mesh) owns the surface, to avoid z-fighting. */
+  setBaseSurface(visible: boolean): void {
+    this.earth.setSurfaceVisible(visible);
+  }
+
   /** Resize the drawable (device pixels). Call after the host resizes the canvas. */
   resize(widthPx: number, heightPx: number): void {
     if (this.canvas.width === widthPx && this.canvas.height === heightPx) return;
