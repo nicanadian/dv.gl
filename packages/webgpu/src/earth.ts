@@ -266,12 +266,20 @@ export class EarthRenderer {
     this.device.queue.writeBuffer(this.gridCameraBuf, 0, this.cameraStage);
   }
 
+  private gridVisible = true;
+
+  /** Show/hide the lat/lon graticule (e.g. when a custom earth substrate owns the look). */
+  setGridVisible(v: boolean): void {
+    this.gridVisible = v;
+  }
+
   draw(pass: GPURenderPassEncoder): void {
     pass.setPipeline(this.surfacePipeline);
     pass.setBindGroup(0, this.bindGroup);
     pass.setVertexBuffer(0, this.vertexBuf);
     pass.setIndexBuffer(this.indexBuf, "uint32");
     pass.drawIndexed(this.indexCount);
+    if (!this.gridVisible) return;
     pass.setPipeline(this.gridPipeline);
     pass.setBindGroup(0, this.gridBindGroup);
     pass.setVertexBuffer(0, this.gridVertexBuf);

@@ -112,7 +112,7 @@ export class DelaunayEarthLayer implements Layer {
     this.sampler = opts.sampler;
     this.borders = opts.borders;
     this.levelPoints = opts.levelPoints ?? [4200, 17000];
-    this.lift = opts.liftKm ?? 12; // above the Scene graticule (~9.5 km) so it doesn't bleed through
+    this.lift = opts.liftKm ?? 4;
     this.wireCol = opts.wireColor ?? [0.05, 0.06, 0.09, 0.7];
     this.borderCol = opts.borderColor ?? [0.02, 0.02, 0.03, 0.95];
     this.borderWidthPx = opts.borderWidthPx ?? 2.4;

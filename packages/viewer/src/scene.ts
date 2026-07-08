@@ -152,6 +152,11 @@ export class Scene {
     }
   }
 
+  /** Show/hide the base Earth's lat/lon graticule. */
+  setGraticule(visible: boolean): void {
+    this.earth.setGridVisible(visible);
+  }
+
   /** Resize the drawable (device pixels). Call after the host resizes the canvas. */
   resize(widthPx: number, heightPx: number): void {
     if (this.canvas.width === widthPx && this.canvas.height === heightPx) return;
