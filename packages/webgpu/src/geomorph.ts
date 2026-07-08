@@ -120,7 +120,7 @@ export class GeomorphEarthRenderer {
   private readonly colorBuf: GPUBuffer;
   private readonly vertexBuf: GPUBuffer;
   private readonly vertexCount: number;
-  private readonly cameraStage = new Float32Array(16 + 4 * 5);
+  private readonly cameraStage = new Float32Array(16 + 4 * 6); // mat4 + 6 vec4
   private readonly colorStage: Float32Array<ArrayBuffer>;
   // tuning
   bandHiKm = 12000;
