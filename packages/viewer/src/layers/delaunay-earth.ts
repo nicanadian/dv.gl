@@ -137,6 +137,13 @@ export class DelaunayEarthLayer implements Layer {
   private readonly borderCol: readonly [number, number, number, number];
   private readonly borderWidthPx: number;
   private levels: Level[] = [];
+  private ops: number[] = [];
+  // fade-in band [hiKm, loKm] per blended level (levels 1, 2, ...); keep zooming ->
+  // finer level fades in. Level 1 ~ LEO overview -> regional; level 2 ~ close-in.
+  private readonly bands: [number, number][] = [
+    [9000, 3500],
+    [2800, 900],
+  ];
   private borderR: ThickLineRenderer | undefined;
   private grad: Float32Array | undefined; // GWxGH edge-magnitude density field
   private readonly GW = 512;
@@ -147,7 +154,7 @@ export class DelaunayEarthLayer implements Layer {
   constructor(opts: DelaunayEarthLayerOptions) {
     this.sampler = opts.sampler;
     this.borders = opts.borders;
-    this.levelPoints = opts.levelPoints ?? [5200, 21000];
+    this.levelPoints = opts.levelPoints ?? [5200, 21000, 52000];
     this.lift = opts.liftKm ?? 4;
     this.wireCol = opts.wireColor ?? [0.05, 0.06, 0.09, 0.7];
     this.borderCol = opts.borderColor ?? [0.02, 0.02, 0.03, 0.95];
@@ -342,10 +349,12 @@ export class DelaunayEarthLayer implements Layer {
 
   init(ctx: LayerContext): void {
     this.buildDensity();
-    this.levels = [
-      this.buildLevel(ctx, this.levelPoints[0] ?? 2600, 12345, false), // coarse opaque base
-      this.buildLevel(ctx, this.levelPoints[1] ?? 9000, 6789, true), // fine, fades in
-    ];
+    // level 0 = opaque coarse base; each finer level blends in over a camera-altitude
+    // band as you keep zooming. seeds differ so the point sets (and meshes) differ.
+    const seeds = [12345, 6789, 4242, 9111, 7321];
+    this.levels = this.levelPoints.map((n, i) =>
+      this.buildLevel(ctx, n, seeds[i] ?? 1000 + i, i > 0),
+    );
     if (this.borders && this.borders.length >= 6) {
       const segCount = this.borders.length / 6;
       const bcol = new Float32Array(segCount * 4);
@@ -364,40 +373,32 @@ export class DelaunayEarthLayer implements Layer {
     this.visible = v;
   }
 
-  private fineOpacity(eyeKm: readonly [number, number, number]): number {
-    const alt = Math.hypot(eyeKm[0] ?? 0, eyeKm[1] ?? 0, eyeKm[2] ?? 0) - 6371;
-    const hi = 9000; // fine starts fading in
-    const lo = 3500; // fine fully in
-    return Math.max(0, Math.min(1, (hi - alt) / (hi - lo)));
+  /** Fade-in band [hiKm, loKm] for blended level i (i>=1): 0 above hi, 1 below lo. */
+  private opacityFor(i: number, alt: number): number {
+    if (i === 0) return 1;
+    const band = this.bands[i - 1];
+    if (!band) return 1;
+    return Math.max(0, Math.min(1, (band[0] - alt) / (band[0] - band[1])));
   }
 
   update(frame: FrameContext): void {
     if (!this.levels.length) return;
     this.epochMs = frame.epochMs;
     const sun = sunEciUnit(this.epochMs + frame.timeSec * 1000);
-    const fine = this.fineOpacity(frame.eyeKm);
-    const coarse = this.levels[0] as Level;
-    const detail = this.levels[1] as Level;
-    coarse.fills.updateCamera(
-      frame.viewProjRte,
-      frame.eyeKm,
-      frame.gmstRad,
-      sun,
-      frame.timeSec,
-      2,
-      1,
-    );
-    coarse.wire.updateCamera(frame.viewProjRte, frame.eyeKm, frame.gmstRad);
-    detail.fills.updateCamera(
-      frame.viewProjRte,
-      frame.eyeKm,
-      frame.gmstRad,
-      sun,
-      frame.timeSec,
-      2,
-      fine,
-    );
-    detail.wire.updateCamera(frame.viewProjRte, frame.eyeKm, frame.gmstRad);
+    const alt = Math.hypot(frame.eyeKm[0] ?? 0, frame.eyeKm[1] ?? 0, frame.eyeKm[2] ?? 0) - 6371;
+    this.ops = this.levels.map((_, i) => this.opacityFor(i, alt));
+    this.levels.forEach((lv, i) => {
+      lv.fills.updateCamera(
+        frame.viewProjRte,
+        frame.eyeKm,
+        frame.gmstRad,
+        sun,
+        frame.timeSec,
+        2,
+        this.ops[i] ?? 1,
+      );
+      lv.wire.updateCamera(frame.viewProjRte, frame.eyeKm, frame.gmstRad);
+    });
     this.borderR?.updateCamera(
       frame.viewProjRte,
       frame.eyeKm,
@@ -406,19 +407,20 @@ export class DelaunayEarthLayer implements Layer {
       frame.gmstRad,
       true,
     );
-    this.fine = fine;
   }
-
-  private fine = 0;
 
   draw(pass: GPURenderPassEncoder): void {
     if (!this.visible || !this.levels.length) return;
-    const coarse = this.levels[0] as Level;
-    const detail = this.levels[1] as Level;
-    coarse.fills.draw(pass); // opaque base
-    if (this.fine > 0.01) detail.fills.draw(pass); // blended fine, fades in
-    // wireframe of whichever level dominates; borders always on top
-    (this.fine > 0.5 ? detail.wire : coarse.wire).draw(pass);
+    (this.levels[0] as Level).fills.draw(pass); // opaque base
+    for (let i = 1; i < this.levels.length; i += 1) {
+      if ((this.ops[i] ?? 0) > 0.01) (this.levels[i] as Level).fills.draw(pass);
+    }
+    // wireframe of the finest level that's dominant; borders always on top
+    let dom = this.levels[0] as Level;
+    for (let i = 1; i < this.levels.length; i += 1) {
+      if ((this.ops[i] ?? 0) > 0.5) dom = this.levels[i] as Level;
+    }
+    dom.wire.draw(pass);
     this.borderR?.draw(pass);
   }
 
