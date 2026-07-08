@@ -111,8 +111,8 @@ export class DelaunayEarthLayer implements Layer {
   constructor(opts: DelaunayEarthLayerOptions) {
     this.sampler = opts.sampler;
     this.borders = opts.borders;
-    this.levelPoints = opts.levelPoints ?? [2600, 9000];
-    this.lift = opts.liftKm ?? 3;
+    this.levelPoints = opts.levelPoints ?? [4200, 17000];
+    this.lift = opts.liftKm ?? 12; // above the Scene graticule (~9.5 km) so it doesn't bleed through
     this.wireCol = opts.wireColor ?? [0.05, 0.06, 0.09, 0.7];
     this.borderCol = opts.borderColor ?? [0.02, 0.02, 0.03, 0.95];
     this.borderWidthPx = opts.borderWidthPx ?? 2.4;
@@ -163,13 +163,13 @@ export class DelaunayEarthLayer implements Layer {
     const x = Math.max(0, Math.min(this.GW - 1, Math.floor(((lonDeg + 180) / 360) * this.GW)));
     const y = Math.max(0, Math.min(this.GH - 1, Math.floor(((90 - latDeg) / 180) * this.GH)));
     const g = this.grad[y * this.GW + x] ?? 0;
-    return 0.05 + 0.95 * g ** 0.6; // ocean floor + strong pull to coasts/relief
+    return 0.16 + 0.84 * g ** 0.5; // ocean floor (keeps ocean from going huge) + coast pull
   }
 
   private generatePoints(n: number, seed: number): [number, number][] {
     const rng = mulberry32(seed);
     const pts: [number, number][] = [];
-    const baseN = Math.floor(n * 0.4);
+    const baseN = Math.floor(n * 0.5); // more even base so ocean isn't gigantic
     for (let i = 0; i < baseN; i += 1) {
       pts.push([rng() * 360 - 180, (Math.asin(rng() * 2 - 1) * 180) / Math.PI]);
     }
@@ -268,11 +268,12 @@ export class DelaunayEarthLayer implements Layer {
       blend,
     });
     const style = defaultMosaicStyle();
-    style[17] = 0.28; // facetShade
+    style[17] = 0.22; // facetShade (subtle, let the real color read)
     style[8] = 0.28;
     style[9] = 0.5;
     style[10] = 0.72;
     style[11] = 3.4; // limb a touch softer
+    style[23] = 0.6; // oceanShallow.w -> night-side flatten (keeps the dark side legible)
     rFills.setStyle(style);
     rFills.setFacetData(fd);
     rFills.setFacetColors(colors);

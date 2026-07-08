@@ -138,6 +138,9 @@ fn fs(in : VsOut) -> @location(0) vec4<f32> {
   let dayness = smoothstep(-0.12, 0.12, dot(sN, sun));
   let nightCol = mix(base * 0.10, st.nightFloor.rgb, st.nightFloor.w);
   var col = mix(nightCol, base, dayness);
+  // low-poly "flatten": lift the night side back toward the lit base so the whole
+  // globe reads (oceanShallow.w is unused in direct-color mode; 0=full day/night).
+  if (mode > 1.5) { col = mix(col, base, st.oceanShallow.w); }
 
   // one ocean glint tracking the subsolar point (the entire "idle life", free)
   let eyeAbs = cam.eyeHigh.xyz + cam.eyeLow.xyz;

@@ -79,6 +79,7 @@ export class BasemapLayer implements Layer {
   private readonly coastCol: readonly [number, number, number, number];
   private readonly borderCol: readonly [number, number, number, number];
   private readonly landCol: readonly [number, number, number, number];
+  private visible = true;
 
   constructor(opts: BasemapLayerOptions) {
     this.coast = opts.coastlines;
@@ -131,7 +132,13 @@ export class BasemapLayer implements Layer {
     this.borderR?.updateCamera(frame.viewProjRte, frame.eyeKm, frame.gmstRad);
   }
 
+  /** Hide the whole basemap (e.g. when a low-poly earth draws its own coast/borders). */
+  setVisible(v: boolean): void {
+    this.visible = v;
+  }
+
   draw(pass: GPURenderPassEncoder): void {
+    if (!this.visible) return;
     this.landR?.draw(pass); // filled land first, coastlines/borders on top
     this.coastR?.draw(pass);
     this.borderR?.draw(pass);
