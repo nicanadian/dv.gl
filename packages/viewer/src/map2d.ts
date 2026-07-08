@@ -59,16 +59,11 @@ const STAMP_CAP_RAD = 90 / EARTH_R_KM;
 const CAP = 128;
 const EYE0: readonly [number, number, number] = [0, 0, 0];
 
-/** Letterboxed orthographic projection: plane coords -> aspect-correct clip space. */
-function orthoViewProj(w: number, h: number): Float32Array {
+/** Base letterbox scale (before pan/zoom) for a w×h canvas: [sx, sy]. */
+function baseScale(w: number, h: number): [number, number] {
   const a = w / h;
   const sy = Math.min(0.95, 0.475 * a);
-  const sx = sy / a;
-  const m = new Float32Array(16);
-  m[0] = sx;
-  m[5] = sy;
-  m[15] = 1;
-  return m;
+  return [sy / a, sy];
 }
 
 export class Map2DView {
@@ -131,6 +126,11 @@ export class Map2DView {
   private pickX = -1;
   private pickY = -1;
   private pickPending = false;
+
+  // pan/zoom view state: center in plane coords (lon/90, lat/90), zoom factor
+  private viewCX = 0;
+  private viewCY = 0;
+  private viewZoom = 1;
 
   private constructor(opts: Map2DViewOptions, device: GPUDevice, ownsDevice: boolean) {
     this.canvas = opts.canvas;
@@ -396,10 +396,105 @@ export class Map2DView {
     this.raf = requestAnimationFrame(this.loop);
   };
 
+  /** Letterboxed ortho with the current pan/zoom folded in. */
+  private viewProj(w: number, h: number): Float32Array {
+    const [sx, sy] = baseScale(w, h);
+    const z = this.viewZoom;
+    const m = new Float32Array(16);
+    m[0] = sx * z;
+    m[5] = sy * z;
+    m[12] = -sx * z * this.viewCX;
+    m[13] = -sy * z * this.viewCY;
+    m[15] = 1;
+    return m;
+  }
+
+  /** Set the view: center in plane coords (lon/90, lat/90) + zoom (clamped >= 1). */
+  setView(centerX: number, centerY: number, zoom: number): void {
+    this.viewZoom = Math.max(1, Math.min(48, zoom));
+    this.viewCX = Math.max(-2, Math.min(2, centerX));
+    this.viewCY = Math.max(-1, Math.min(1, centerY));
+  }
+
+  /** Device-pixel coords -> plane coords (lon/90, lat/90) under the current view. */
+  screenToPlane(xDevicePx: number, yDevicePx: number): [number, number] {
+    const w = this.canvas.width;
+    const h = this.canvas.height;
+    const [sx, sy] = baseScale(w, h);
+    const ndcx = (xDevicePx / w) * 2 - 1;
+    const ndcy = 1 - (yDevicePx / h) * 2;
+    return [this.viewCX + ndcx / (sx * this.viewZoom), this.viewCY + ndcy / (sy * this.viewZoom)];
+  }
+
+  /** Device-pixel coords -> geodetic lat/lon (deg) on the flat map, or null if off-map. */
+  groundPick(xDevicePx: number, yDevicePx: number): { latDeg: number; lonDeg: number } | null {
+    const [px, py] = this.screenToPlane(xDevicePx, yDevicePx);
+    const latDeg = py * 90;
+    const lonDeg = px * 90;
+    if (latDeg < -90 || latDeg > 90 || lonDeg < -180 || lonDeg > 180) return null;
+    return { latDeg, lonDeg };
+  }
+
+  /** Wheel-zoom (toward cursor) + drag-pan on an element; returns a detacher. */
+  attachControls(el: HTMLElement): () => void {
+    let dragging = false;
+    let lastX = 0;
+    let lastY = 0;
+    const dpr = (): number => this.canvas.width / (el.clientWidth || 1);
+    const down = (e: PointerEvent): void => {
+      dragging = true;
+      lastX = e.clientX;
+      lastY = e.clientY;
+      el.setPointerCapture?.(e.pointerId);
+    };
+    const move = (e: PointerEvent): void => {
+      if (!dragging) return;
+      const w = this.canvas.width;
+      const h = this.canvas.height;
+      const [sx, sy] = baseScale(w, h);
+      const dx = (e.clientX - lastX) * dpr();
+      const dy = (e.clientY - lastY) * dpr();
+      this.setView(
+        this.viewCX - ((dx / w) * 2) / (sx * this.viewZoom),
+        this.viewCY + ((dy / h) * 2) / (sy * this.viewZoom),
+        this.viewZoom,
+      );
+      lastX = e.clientX;
+      lastY = e.clientY;
+    };
+    const up = (): void => {
+      dragging = false;
+    };
+    const wheel = (e: WheelEvent): void => {
+      e.preventDefault();
+      const w = this.canvas.width;
+      const h = this.canvas.height;
+      const px = e.offsetX * dpr();
+      const py = e.offsetY * dpr();
+      const [plx, ply] = this.screenToPlane(px, py);
+      const zc = Math.max(1, Math.min(48, this.viewZoom * (1 - e.deltaY * 0.0015)));
+      const [sx, sy] = baseScale(w, h);
+      const ndcx = (px / w) * 2 - 1;
+      const ndcy = 1 - (py / h) * 2;
+      // keep the plane point under the cursor fixed as zoom changes
+      this.setView(plx - ndcx / (sx * zc), ply - ndcy / (sy * zc), zc);
+    };
+    el.addEventListener("pointerdown", down);
+    el.addEventListener("pointermove", move);
+    el.addEventListener("pointerup", up);
+    el.addEventListener("wheel", wheel, { passive: false });
+    return () => {
+      el.removeEventListener("pointerdown", down);
+      el.removeEventListener("pointermove", move);
+      el.removeEventListener("pointerup", up);
+      el.removeEventListener("wheel", wheel);
+    };
+  }
+
   renderOnce(): void {
     const w = this.canvas.width;
     const h = this.canvas.height;
-    const vp = orthoViewProj(w, h);
+    const vp = this.viewProj(w, h);
     const minutes = this.clock.currentSeconds / 60;
     const nowSec = this.clock.currentSeconds;
     const theta = gmst(this.clock.currentUnixMs());

@@ -24,7 +24,7 @@
  * mounts.
  */
 import { MissionClock } from "@dvgl/core";
-import { gmst } from "@dvgl/frames";
+import { ecefToGeodetic, gmst } from "@dvgl/frames";
 import { EarthRenderer } from "@dvgl/webgpu";
 import { OrbitCamera } from "./camera.js";
 import type { FrameContext, Layer, PickHit } from "./types.js";
@@ -255,6 +255,60 @@ export class Scene {
       el.removeEventListener("pointerup", up);
       el.removeEventListener("wheel", wheel);
     };
+  }
+
+  /**
+   * Unproject a device-pixel coordinate to a ground point on the Earth sphere and return
+   * its geodetic lat/lon (Earth-fixed), or null if the ray misses the globe. Uses the
+   * orbit camera basis (looks at origin) — no matrix inversion. Ignores earthFixed mode.
+   */
+  groundPick(xDevicePx: number, yDevicePx: number): { latDeg: number; lonDeg: number } | null {
+    const w = this.canvas.width;
+    const h = this.canvas.height;
+    const eye = this.camera.eye(0);
+    // camera basis: forward toward origin, world up = +Z
+    const flen = Math.hypot(eye[0], eye[1], eye[2]) || 1;
+    const fwd: [number, number, number] = [-eye[0] / flen, -eye[1] / flen, -eye[2] / flen];
+    let rx = fwd[1] * 1 - fwd[2] * 0;
+    let ry = fwd[2] * 0 - fwd[0] * 1;
+    let rz = fwd[0] * 0 - fwd[1] * 0; // cross(fwd, [0,0,1])
+    const rl = Math.hypot(rx, ry, rz) || 1;
+    rx /= rl;
+    ry /= rl;
+    rz /= rl;
+    const ux = ry * fwd[2] - rz * fwd[1];
+    const uy = rz * fwd[0] - rx * fwd[2];
+    const uz = rx * fwd[1] - ry * fwd[0]; // up = cross(right, fwd)
+    const th = Math.tan((this.camera.fovyDeg * Math.PI) / 360);
+    const asp = w / h;
+    const nx = (xDevicePx / w) * 2 - 1;
+    const ny = 1 - (yDevicePx / h) * 2;
+    let dx = fwd[0] + nx * th * asp * rx + ny * th * ux;
+    let dy = fwd[1] + nx * th * asp * ry + ny * th * uy;
+    let dz = fwd[2] + nx * th * asp * rz + ny * th * uz;
+    const dl = Math.hypot(dx, dy, dz) || 1;
+    dx /= dl;
+    dy /= dl;
+    dz /= dl;
+    // ray-sphere (center 0, R=6371): |eye + t d|^2 = R^2
+    const R = 6371;
+    const b = 2 * (eye[0] * dx + eye[1] * dy + eye[2] * dz);
+    const c = eye[0] * eye[0] + eye[1] * eye[1] + eye[2] * eye[2] - R * R;
+    const disc = b * b - 4 * c;
+    if (disc < 0) return null;
+    const t = (-b - Math.sqrt(disc)) / 2;
+    if (t <= 0) return null;
+    // inertial hit -> Earth-fixed via Rz(-gmst) -> geodetic
+    const hx = eye[0] + t * dx;
+    const hy = eye[1] + t * dy;
+    const hz = eye[2] + t * dz;
+    const g = gmst(this.clock.currentUnixMs());
+    const cg = Math.cos(-g);
+    const sg = Math.sin(-g);
+    const fxx = cg * hx - sg * hy;
+    const fyy = sg * hx + cg * hy;
+    const geo = ecefToGeodetic(fxx, fyy, hz);
+    return { latDeg: geo.latDeg, lonDeg: geo.lonDeg };
   }
 
   private readonly loop = (): void => {
