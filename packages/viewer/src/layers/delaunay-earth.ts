@@ -109,6 +109,130 @@ function mulberry32(seed: number): () => number {
   };
 }
 
+// ---- standalone faceted-mesh builder (shared by the 3D layer + the 2D map) --------
+function buildGrad(sampler: EquirectSampler, GW: number, GH: number): Float32Array {
+  const { width: w, height: h, data } = sampler;
+  const lum = new Float32Array(GW * GH);
+  for (let y = 0; y < GH; y += 1) {
+    const sy = Math.min(h - 1, Math.floor((y / GH) * h));
+    for (let x = 0; x < GW; x += 1) {
+      const sx = Math.min(w - 1, Math.floor((x / GW) * w));
+      const i = (sy * w + sx) * 4;
+      lum[y * GW + x] =
+        (0.3 * (data[i] ?? 0) + 0.59 * (data[i + 1] ?? 0) + 0.11 * (data[i + 2] ?? 0)) / 255;
+    }
+  }
+  const grad = new Float32Array(GW * GH);
+  let max = 1e-6;
+  for (let y = 1; y < GH - 1; y += 1) {
+    for (let x = 1; x < GW - 1; x += 1) {
+      const gx = (lum[y * GW + x + 1] ?? 0) - (lum[y * GW + x - 1] ?? 0);
+      const gy = (lum[(y + 1) * GW + x] ?? 0) - (lum[(y - 1) * GW + x] ?? 0);
+      const m = Math.hypot(gx, gy);
+      grad[y * GW + x] = m;
+      if (m > max) max = m;
+    }
+  }
+  for (let i = 0; i < grad.length; i += 1) grad[i] = (grad[i] ?? 0) / max;
+  return grad;
+}
+function sampleRgbAt(sampler: EquirectSampler, lonDeg: number, latDeg: number): V3 {
+  const { width: w, height: h, data } = sampler;
+  let px = Math.floor(((lonDeg + 180) / 360) * w);
+  const py = Math.max(0, Math.min(h - 1, Math.floor(((90 - latDeg) / 180) * h)));
+  px = ((px % w) + w) % w;
+  const i = (py * w + px) * 4;
+  return [(data[i] ?? 0) / 255, (data[i + 1] ?? 0) / 255, (data[i + 2] ?? 0) / 255];
+}
+function facetColorAt(sampler: EquirectSampler, clon: number, clat: number, f: number): V3 {
+  const rgb = sampleRgbAt(sampler, clon, clat);
+  const luma = 0.3 * rgb[0] + 0.59 * rgb[1] + 0.11 * rgb[2];
+  const h = hashF(f);
+  if (rgb[2] > rgb[0] + 0.015 && rgb[2] > rgb[1] + 0.01 && luma < 0.34) {
+    return oceanTint(clon, clat, Math.min(1, luma * 3), h);
+  }
+  const v = 1 + (h - 0.5) * 2 * 0.09;
+  return [rgb[0] * v, rgb[1] * v, rgb[2] * v];
+}
+function genPoints(
+  density: (lon: number, lat: number) => number,
+  n: number,
+  seed: number,
+): [number, number][] {
+  const rng = mulberry32(seed);
+  const pts: [number, number][] = [];
+  const baseN = Math.floor(n * 0.5);
+  for (let i = 0; i < baseN; i += 1) {
+    pts.push([rng() * 360 - 180, (Math.asin(rng() * 2 - 1) * 180) / Math.PI]);
+  }
+  let attempts = 0;
+  const cap = n * 60;
+  while (pts.length < n && attempts < cap) {
+    attempts += 1;
+    const lon = rng() * 360 - 180;
+    const lat = (Math.asin(rng() * 2 - 1) * 180) / Math.PI;
+    if (rng() < density(lon, lat)) pts.push([lon, lat]);
+  }
+  pts.push([0, 89.7], [90, -89.7], [-90, -89.7]);
+  return pts;
+}
+
+/**
+ * Build a feature-adaptive spherical-Delaunay faceted mesh from a raster: ECEF-km
+ * triangle positions (stride 3, 3 verts/tri) + flat per-vertex RGBA (stride 4). Shared
+ * by the 3D low-poly layer and the 2D map's low-poly basemap (it reprojects these).
+ */
+export function buildDelaunayFacets(
+  sampler: EquirectSampler,
+  opts: { points?: number; liftKm?: number } = {},
+): { positions: Float32Array; colors: Float32Array } {
+  const points = opts.points ?? 18000;
+  const liftKm = opts.liftKm ?? 4;
+  const GW = 512;
+  const GH = 256;
+  const grad = buildGrad(sampler, GW, GH);
+  const density = (lon: number, lat: number): number => {
+    const x = Math.max(0, Math.min(GW - 1, Math.floor(((lon + 180) / 360) * GW)));
+    const y = Math.max(0, Math.min(GH - 1, Math.floor(((90 - lat) / 180) * GH)));
+    return 0.38 + 0.62 * (grad[y * GW + x] ?? 0) ** 0.5;
+  };
+  const pts = genPoints(density, points, 6789);
+  const tris = geoDelaunay(pts).triangles;
+  const ecef: V3[] = pts.map(([lon, lat]) => dirToEcef(lat, lon, liftKm));
+  const positions = new Float32Array(tris.length * 9);
+  const colors = new Float32Array(tris.length * 12);
+  for (let f = 0; f < tris.length; f += 1) {
+    const tri = tris[f] as number[];
+    const ia = tri[0] as number;
+    const ib = tri[1] as number;
+    const ic = tri[2] as number;
+    const a = ecef[ia] as V3;
+    const b = ecef[ib] as V3;
+    const c = ecef[ic] as V3;
+    const cx = a[0] + b[0] + c[0];
+    const cy = a[1] + b[1] + c[1];
+    const cz = a[2] + b[2] + c[2];
+    const cl = Math.hypot(cx, cy, cz) || 1;
+    const clat = (Math.asin(Math.max(-1, Math.min(1, cz / cl))) * 180) / Math.PI;
+    const clon = (Math.atan2(cy, cx) * 180) / Math.PI;
+    const col = facetColorAt(sampler, clon, clat, f);
+    const idx = [ia, ib, ic];
+    for (let k = 0; k < 3; k += 1) {
+      const v = ecef[idx[k] as number] as V3;
+      const po = f * 9 + k * 3;
+      positions[po] = v[0];
+      positions[po + 1] = v[1];
+      positions[po + 2] = v[2];
+      const co = f * 12 + k * 4;
+      colors[co] = Math.max(0, Math.min(1, col[0]));
+      colors[co + 1] = Math.max(0, Math.min(1, col[1]));
+      colors[co + 2] = Math.max(0, Math.min(1, col[2]));
+      colors[co + 3] = 1;
+    }
+  }
+  return { positions, colors };
+}
+
 interface Level {
   fills: MosaicEarthRenderer;
   wire: LineRenderer;

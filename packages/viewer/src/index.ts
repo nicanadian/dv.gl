@@ -48,6 +48,7 @@ export { BasemapLayer, type BasemapLayerOptions, parseBasemap } from "./layers/b
 export { CollectsLayer, type CollectsLayerOptions } from "./layers/collects.js";
 export { CoverageLayer, type CoverageLayerOptions } from "./layers/coverage.js";
 export {
+  buildDelaunayFacets,
   DelaunayEarthLayer,
   type DelaunayEarthLayerOptions,
   type EquirectSampler,

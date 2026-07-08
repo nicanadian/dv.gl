@@ -334,6 +334,52 @@ export class Map2DView {
     }
   }
 
+  /**
+   * Low-poly basemap: reproject a faceted ECEF triangle mesh (positions stride 3, 3
+   * verts/tri; per-vertex rgba stride 4) to sub-satellite plane coords, dropping
+   * antimeridian-spanning tris. Replaces the flat land fill with the faceted colors.
+   */
+  setFacetBasemap(positions: Float32Array, rgba: Float32Array): void {
+    const triCount = Math.floor(positions.length / 9);
+    const tp = new Float32Array(triCount * 9);
+    const tc = new Float32Array(triCount * 12);
+    let t = 0;
+    for (let i = 0; i + 9 <= positions.length; i += 9) {
+      const g0 = ecefToGeodetic(positions[i] ?? 0, positions[i + 1] ?? 0, positions[i + 2] ?? 0);
+      const g1 = ecefToGeodetic(
+        positions[i + 3] ?? 0,
+        positions[i + 4] ?? 0,
+        positions[i + 5] ?? 0,
+      );
+      const g2 = ecefToGeodetic(
+        positions[i + 6] ?? 0,
+        positions[i + 7] ?? 0,
+        positions[i + 8] ?? 0,
+      );
+      const x0 = g0.lonDeg / 90;
+      const x1 = g1.lonDeg / 90;
+      const x2 = g2.lonDeg / 90;
+      if (Math.max(x0, x1, x2) - Math.min(x0, x1, x2) > 2) continue; // antimeridian smear
+      const p = t * 9;
+      tp[p] = x0;
+      tp[p + 1] = g0.latDeg / 90;
+      tp[p + 3] = x1;
+      tp[p + 4] = g1.latDeg / 90;
+      tp[p + 6] = x2;
+      tp[p + 7] = g2.latDeg / 90;
+      const ci = (i / 9) * 12;
+      tc.set(rgba.subarray(ci, ci + 12), t * 12);
+      t += 1;
+    }
+    this.basemapTriCount = t;
+    if (t > 0) {
+      if (!this.basemapTris) {
+        this.basemapTris = new TriRenderer(this.device, { capacity: t * 3, format: this.format });
+      }
+      this.basemapTris.setTriangles(tp.subarray(0, t * 9), tc.subarray(0, t * 12), t);
+    }
+  }
+
   /** Subscribe to picks (nearest sub-satellite dot under the cursor, or null). */
   onPick(cb: (hit: PickHit | null) => void): () => void {
     this.pickCbs.add(cb);
