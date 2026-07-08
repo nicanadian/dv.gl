@@ -62,6 +62,42 @@ function dirToEcef(latDeg: number, lonDeg: number, liftKm: number): V3 {
     (n * (1 - E2) + liftKm) * sLat,
   ];
 }
+function hashF(i: number): number {
+  const s = Math.sin(i * 12.9898 + 78.233) * 43758.5453;
+  return s - Math.floor(s);
+}
+function mix3(a: V3, b: V3, t: number): V3 {
+  const u = Math.max(0, Math.min(1, t));
+  return [a[0] + (b[0] - a[0]) * u, a[1] + (b[1] - a[1]) * u, a[2] + (b[2] - a[2]) * u];
+}
+
+const OCEAN_DEEP: V3 = [0.02, 0.08, 0.19];
+const OCEAN_MID: V3 = [0.05, 0.2, 0.36];
+const OCEAN_SHALLOW: V3 = [0.11, 0.42, 0.5];
+const OCEAN_POLAR: V3 = [0.13, 0.2, 0.3];
+
+/**
+ * Stylized ocean facet color: a bathymetric ramp (deep indigo -> teal) driven by a
+ * low-frequency field + a coast-shallowness cue, tinted toward steel-blue near the
+ * poles, with a small per-facet value jitter — so the sea reads as varied low-poly
+ * facets instead of flat navy. `shallow` in [0,1] (1 = near coast).
+ */
+function oceanTint(lonDeg: number, latDeg: number, shallow: number, h: number): V3 {
+  const lo = (lonDeg * Math.PI) / 180;
+  const la = (latDeg * Math.PI) / 180;
+  const n =
+    0.5 +
+    0.3 * Math.sin(2.7 * lo + 1.1) * Math.cos(2.1 * la) +
+    0.2 * Math.sin(5.3 * la) * Math.cos(4.1 * lo);
+  const t = Math.max(0, Math.min(1, 0.55 * n + 0.45 * shallow));
+  let c =
+    t > 0.5 ? mix3(OCEAN_MID, OCEAN_SHALLOW, (t - 0.5) * 2) : mix3(OCEAN_DEEP, OCEAN_MID, t * 2);
+  const absLat = Math.abs(latDeg) / 90;
+  c = mix3(c, OCEAN_POLAR, Math.max(0, (absLat - 0.55) / 0.45) * 0.6);
+  const v = 1 + (h - 0.5) * 2 * 0.16; // stronger jitter for the sea's low-poly variety
+  return [c[0] * v, c[1] * v, c[2] * v];
+}
+
 function mulberry32(seed: number): () => number {
   let a = seed >>> 0;
   return () => {
@@ -111,7 +147,7 @@ export class DelaunayEarthLayer implements Layer {
   constructor(opts: DelaunayEarthLayerOptions) {
     this.sampler = opts.sampler;
     this.borders = opts.borders;
-    this.levelPoints = opts.levelPoints ?? [4200, 17000];
+    this.levelPoints = opts.levelPoints ?? [5200, 21000];
     this.lift = opts.liftKm ?? 4;
     this.wireCol = opts.wireColor ?? [0.05, 0.06, 0.09, 0.7];
     this.borderCol = opts.borderColor ?? [0.02, 0.02, 0.03, 0.95];
@@ -163,7 +199,7 @@ export class DelaunayEarthLayer implements Layer {
     const x = Math.max(0, Math.min(this.GW - 1, Math.floor(((lonDeg + 180) / 360) * this.GW)));
     const y = Math.max(0, Math.min(this.GH - 1, Math.floor(((90 - latDeg) / 180) * this.GH)));
     const g = this.grad[y * this.GW + x] ?? 0;
-    return 0.16 + 0.84 * g ** 0.5; // ocean floor (keeps ocean from going huge) + coast pull
+    return 0.38 + 0.62 * g ** 0.5; // higher ocean floor -> the sea is faceted too, + coast pull
   }
 
   private generatePoints(n: number, seed: number): [number, number][] {
@@ -225,9 +261,20 @@ export class DelaunayEarthLayer implements Layer {
       const clat = (Math.asin(Math.max(-1, Math.min(1, cz / cl))) * 180) / Math.PI;
       const clon = (Math.atan2(cy, cx) * 180) / Math.PI;
       const rgb = this.sampleRgb(clon, clat);
-      colors[f * 4] = rgb[0];
-      colors[f * 4 + 1] = rgb[1];
-      colors[f * 4 + 2] = rgb[2];
+      const luma = 0.3 * rgb[0] + 0.59 * rgb[1] + 0.11 * rgb[2];
+      const h = hashF(f);
+      let col: V3;
+      if (rgb[2] > rgb[0] + 0.015 && rgb[2] > rgb[1] + 0.01 && luma < 0.34) {
+        // ocean: stylized bathymetric palette + per-facet variety (not flat navy)
+        col = oceanTint(clon, clat, Math.min(1, luma * 3), h);
+      } else {
+        // land: real color + a touch of per-facet value jitter for the low-poly "cut"
+        const v = 1 + (h - 0.5) * 2 * 0.09;
+        col = [rgb[0] * v, rgb[1] * v, rgb[2] * v];
+      }
+      colors[f * 4] = Math.max(0, Math.min(1, col[0]));
+      colors[f * 4 + 1] = Math.max(0, Math.min(1, col[1]));
+      colors[f * 4 + 2] = Math.max(0, Math.min(1, col[2]));
       colors[f * 4 + 3] = 1;
       fd[f * 2] = 1;
       for (const v of [a, b, c]) {
