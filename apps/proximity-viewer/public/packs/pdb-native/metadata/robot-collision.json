@@ -1,0 +1,173 @@
+{
+  "collision_free": true,
+  "configuration": "ready",
+  "joints": {
+    "elbow_pitch": 0.8,
+    "shoulder_pitch": -0.2,
+    "shoulder_roll": 0.0,
+    "shoulder_yaw": 0.0,
+    "wrist_pitch": -0.6,
+    "wrist_roll": 0.0,
+    "wrist_yaw": 0.0
+  },
+  "robot": "restore_l_class_servicing_arm",
+  "schema_version": "robot_collision/v1",
+  "self": {
+    "collision_free": true,
+    "collisions": [],
+    "minimum_clearance_m": 0.7637690293750128
+  },
+  "target": null,
+  "volumes": [
+    {
+      "center_m": [
+        0.0,
+        0.0,
+        0.04
+      ],
+      "corners_m": [],
+      "endpoint_a_m": null,
+      "endpoint_b_m": null,
+      "kind": "sphere",
+      "link": "base_link",
+      "name": "base_envelope",
+      "radius_m": 0.23
+    },
+    {
+      "center_m": [
+        0.0,
+        0.0,
+        0.15
+      ],
+      "corners_m": [],
+      "endpoint_a_m": null,
+      "endpoint_b_m": null,
+      "kind": "sphere",
+      "link": "shoulder_yaw_link",
+      "name": "shoulder_yaw_envelope",
+      "radius_m": 0.17
+    },
+    {
+      "center_m": [
+        0.0,
+        0.0,
+        0.15
+      ],
+      "corners_m": [],
+      "endpoint_a_m": null,
+      "endpoint_b_m": null,
+      "kind": "sphere",
+      "link": "shoulder_pitch_link",
+      "name": "shoulder_pitch_envelope",
+      "radius_m": 0.16
+    },
+    {
+      "center_m": [
+        0.4900332889206208,
+        0.0,
+        0.24933466539753057
+      ],
+      "corners_m": [],
+      "endpoint_a_m": [
+        0.07840532622729933,
+        0.0,
+        0.16589354646360488
+      ],
+      "endpoint_b_m": [
+        0.9016612516139423,
+        0.0,
+        0.33277578433145627
+      ],
+      "kind": "capsule",
+      "link": "upper_arm",
+      "name": "upper_arm_capsule",
+      "radius_m": 0.09
+    },
+    {
+      "center_m": [
+        1.3927343852960807,
+        0.0,
+        0.0663480940975435
+      ],
+      "corners_m": [],
+      "endpoint_a_m": [
+        1.0460934270340159,
+        0.0,
+        0.3034979329234584
+      ],
+      "endpoint_b_m": [
+        1.7393753435581456,
+        0.0,
+        -0.1708017447283714
+      ],
+      "kind": "capsule",
+      "link": "forearm",
+      "name": "forearm_capsule",
+      "radius_m": 0.085
+    },
+    {
+      "center_m": [
+        1.80540219275092,
+        0.0,
+        -0.21597314259997424
+      ],
+      "corners_m": [],
+      "endpoint_a_m": null,
+      "endpoint_b_m": null,
+      "kind": "sphere",
+      "link": "wrist_yaw_link",
+      "name": "wrist_yaw_envelope",
+      "radius_m": 0.14
+    },
+    {
+      "center_m": [
+        1.80540219275092,
+        0.0,
+        -0.21597314259997424
+      ],
+      "corners_m": [],
+      "endpoint_a_m": null,
+      "endpoint_b_m": null,
+      "kind": "sphere",
+      "link": "wrist_pitch_link",
+      "name": "wrist_pitch_envelope",
+      "radius_m": 0.13
+    },
+    {
+      "center_m": [
+        1.80540219275092,
+        0.0,
+        -0.21597314259997424
+      ],
+      "corners_m": [],
+      "endpoint_a_m": null,
+      "endpoint_b_m": null,
+      "kind": "sphere",
+      "link": "tool_link",
+      "name": "wrist_roll_envelope",
+      "radius_m": 0.12
+    },
+    {
+      "center_m": [
+        1.9254021927509202,
+        0.0,
+        -0.21597314259997424
+      ],
+      "corners_m": [],
+      "endpoint_a_m": [
+        1.84540219275092,
+        0.0,
+        -0.21597314259997424
+      ],
+      "endpoint_b_m": [
+        2.0054021927509202,
+        0.0,
+        -0.21597314259997427
+      ],
+      "kind": "capsule",
+      "link": "tool_link",
+      "name": "tool_envelope",
+      "radius_m": 0.1
+    }
+  ]
+}

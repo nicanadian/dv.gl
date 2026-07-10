@@ -1,0 +1,198 @@
+{
+  "absolute_source": {
+    "chaser_ephemeris_ref": "chaser/ephemeris.json",
+    "ephemeris_ref": "target/ephemeris.json",
+    "gate_id": "gate_pdb_proximity_reference_001",
+    "producer": "pdb",
+    "run_id": "pdb_proximity_reference_001",
+    "target_ephemeris_ref": "target/ephemeris.json"
+  },
+  "center_body": "EARTH",
+  "chaser": {
+    "object_id": "CHASER-PDB-1",
+    "object_name": "pdb_servicer_proxy"
+  },
+  "contract_id": "sk_proximity_tier0_contract",
+  "epoch": "2026-07-10T00:00:00.000Z",
+  "evidence_source": "tier0_differenced",
+  "frame": "LVLH_RIC",
+  "frame_axes": {
+    "cross_track": "-(r x v) orbit normal",
+    "in_track": "Chat x Rhat (with Chat negated)",
+    "ordering": "right_handed_R_I_C",
+    "origin": "target center of mass",
+    "profile": "skframe/v1",
+    "radial": "+r (Earth->target)"
+  },
+  "frame_profile": "skframe/v1",
+  "gate_id": "gate_pdb_proximity_reference_001",
+  "length_units": "m",
+  "mission_id": "pdb_sk_proximity_reference_001",
+  "provenance": {
+    "gate_id": "gate_pdb_proximity_reference_001",
+    "not_official_model": true,
+    "run_id": "pdb_proximity_reference_001"
+  },
+  "samples": [
+    {
+      "phase": "propagated",
+      "relative_state": {
+        "vx_mps": -0.35,
+        "vy_mps": 0.0,
+        "vz_mps": 0.0,
+        "x_m": 250.0,
+        "y_m": 0.0,
+        "z_m": -0.0
+      },
+      "step": 0,
+      "t": "2026-07-10T00:00:00.000Z",
+      "t_rel_s": 0.0
+    },
+    {
+      "phase": "propagated",
+      "relative_state": {
+        "vx_mps": -0.3139120920607806,
+        "vy_mps": -0.022613035373976072,
+        "vz_mps": 0.0,
+        "x_m": 229.56940672030623,
+        "y_m": 15.232248509101428,
+        "z_m": 0.0
+      },
+      "step": 1,
+      "t": "2026-07-10T00:01:00.000Z",
+      "t_rel_s": 60.0
+    },
+    {
+      "phase": "propagated",
+      "relative_state": {
+        "vx_mps": -0.27928943858451294,
+        "vy_mps": -0.04390206942349285,
+        "vz_mps": 0.0,
+        "x_m": 210.33650149466698,
+        "y_m": 27.82968227671065,
+        "z_m": 0.0
+      },
+      "step": 2,
+      "t": "2026-07-10T00:02:00.000Z",
+      "t_rel_s": 120.0
+    },
+    {
+      "phase": "propagated",
+      "relative_state": {
+        "vx_mps": -0.24603978083486852,
+        "vy_mps": -0.06377371248918322,
+        "vz_mps": 0.0,
+        "x_m": 192.38562232760108,
+        "y_m": 37.957071628676424,
+        "z_m": 0.0
+      },
+      "step": 3,
+      "t": "2026-07-10T00:03:00.000Z",
+      "t_rel_s": 180.0
+    },
+    {
+      "phase": "propagated",
+      "relative_state": {
+        "vx_mps": -0.2140649273060644,
+        "vy_mps": -0.08214071940986847,
+        "vz_mps": 0.0,
+        "x_m": 175.79550247244018,
+        "y_m": 45.78998414545236,
+        "z_m": 0.0
+      },
+      "step": 4,
+      "t": "2026-07-10T00:04:00.000Z",
+      "t_rel_s": 240.0
+    },
+    {
+      "phase": "propagated",
+      "relative_state": {
+        "vx_mps": -0.18326116907625975,
+        "vy_mps": -0.09892236549747266,
+        "vz_mps": 0.0,
+        "x_m": 160.63893243551504,
+        "y_m": 51.51402796165137,
+        "z_m": 0.0
+      },
+      "step": 5,
+      "t": "2026-07-10T00:05:00.000Z",
+      "t_rel_s": 300.0
+    },
+    {
+      "phase": "propagated",
+      "relative_state": {
+        "vx_mps": -0.15351971775873108,
+        "vy_mps": -0.11404479589899384,
+        "vz_mps": 0.0,
+        "x_m": 146.98244641538292,
+        "y_m": 55.324052355807744,
+        "z_m": 0.0
+      },
+      "step": 6,
+      "t": "2026-07-10T00:06:00.000Z",
+      "t_rel_s": 360.0
+    },
+    {
+      "phase": "propagated",
+      "relative_state": {
+        "vx_mps": -0.12472716454542304,
+        "vy_mps": -0.12744134693016282,
+        "vz_mps": 0.0,
+        "x_m": 134.88603441688335,
+        "y_m": 57.4233087586035,
+        "z_m": 0.0
+      },
+      "step": 7,
+      "t": "2026-07-10T00:07:00.000Z",
+      "t_rel_s": 420.0
+    },
+    {
+      "phase": "propagated",
+      "relative_state": {
+        "vx_mps": -0.0967659587655698,
+        "vy_mps": -0.13905283804976964,
+        "vz_mps": 0.0,
+        "x_m": 124.40288122619774,
+        "y_m": 58.02257547526067,
+        "z_m": 0.0
+      },
+      "step": 8,
+      "t": "2026-07-10T00:08:00.000Z",
+      "t_rel_s": 480.0
+    },
+    {
+      "phase": "propagated",
+      "relative_state": {
+        "vx_mps": -0.06951490430632538,
+        "vy_mps": -0.1488278332353882,
+        "vz_mps": 0.0,
+        "x_m": 115.57913332550906,
+        "y_m": 57.3392495472234,
+        "z_m": 0.0
+      },
+      "step": 9,
+      "t": "2026-07-10T00:09:00.000Z",
+      "t_rel_s": 540.0
+    },
+    {
+      "phase": "propagated",
+      "relative_state": {
+        "vx_mps": -0.04284967217098709,
+        "vy_mps": -0.15672287060415926,
+        "vz_mps": 0.0,
+        "x_m": 108.45369476271516,
+        "y_m": 55.59640932824204,
+        "z_m": 0.0
+      },
+      "step": 10,
+      "t": "2026-07-10T00:10:00.000Z",
+      "t_rel_s": 600.0
+    }
+  ],
+  "schema_version": "replay/1.0",
+  "target": {
+    "object_id": "TARGET-PDB-1",
+    "object_name": "pdb_client_proxy"
+  },
+  "velocity_units": "m/s"
+}

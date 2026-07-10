@@ -1,0 +1,18 @@
+{
+  "accuracy_tier": "rpo_presentation",
+  "archetype": "large_geo_comms",
+  "com_offset_m": [
+    -0.15,
+    0.0,
+    0.0
+  ],
+  "detail": "high",
+  "generation_method": "kitbash",
+  "generator_version": "0.1.0",
+  "model_name": "rpo_demo_client_proxy",
+  "model_scope": "class_proxy",
+  "not_official_model": true,
+  "origin_policy": "visual_center",
+  "source_basis": "Generic GEO-class bus; apogee-motor nozzle class dimensions estimated (see docs/rpo_feature_dimensions.md). No vendor geometry.",
+  "visual_accuracy": "proxy"
+}

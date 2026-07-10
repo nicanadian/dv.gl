@@ -22,18 +22,17 @@ The default checkout layout expects `gltf-model-builder` next to `dv.gl`:
 pnpm --filter @dvgl/proximity-viewer sync-assets
 ```
 
-Set `GLTF_MODEL_BUILDER_DIR` to override that location. The script:
-
-- runs the sibling `gltf-build generate` command for the servicer, MARMAN client,
-  and LEO grapple client recipes;
-- retains the GLBs and generated proxy metadata but removes Blender authoring files;
-- copies the synthetic V-bar `replay/1.0` fixture;
-- writes `dvgl/proximity-assets/0.1` with SHA-256 content hashes.
+Set `GLTF_MODEL_BUILDER_DIR` to override that location. The script rebuilds
+`public/packs/pdb-native/` as a complete `rpo_viewer_pack/v1` from the native
+pdb run and its Sublime Kinematics replay. The pack contains model tiers,
+metadata, scene plans, replay, policy, checksums, and a strict visual-only
+manifest; the viewer loads only that manifest and its referenced files.
 
 ## Boundary
 
 - Replay evidence supplies every relative transform; the viewer does not propagate a
   second trajectory.
+- `rpo_viewer_pack/v1` supplies the only replay/model paths and content digests.
 - Only `skframe/v1`, `LVLH_RIC`, meters, meters/second, and strictly increasing
   replay samples sharing the declared epoch load.
 - GLBs are `not_official_model: true` visual proxies.

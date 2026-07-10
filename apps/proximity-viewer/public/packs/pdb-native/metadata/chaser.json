@@ -1,18 +1,18 @@
 {
-  "model_name": "rpo_demo_servicer_proxy",
-  "archetype": "optical_imaging_sat",
-  "model_scope": "class_proxy",
-  "generation_method": "kitbash",
-  "visual_accuracy": "proxy",
   "accuracy_tier": "rpo_presentation",
-  "origin_policy": "visual_center",
+  "archetype": "optical_imaging_sat",
   "com_offset_m": [
     0.05,
-    0,
+    0.0,
     -0.05
   ],
   "detail": "high",
+  "generation_method": "kitbash",
+  "generator_version": "0.1.0",
+  "model_name": "rpo_demo_servicer_proxy",
+  "model_scope": "class_proxy",
   "not_official_model": true,
+  "origin_policy": "visual_center",
   "source_basis": "Generic servicer-class bus; soft-capture docking ring is a generic class proxy (docs/rpo_feature_dimensions.md), not a proprietary docking system.",
-  "generator_version": "0.1.0"
+  "visual_accuracy": "proxy"
 }

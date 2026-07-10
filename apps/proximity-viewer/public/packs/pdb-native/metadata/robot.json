@@ -1,0 +1,1128 @@
+{
+  "accuracy_tier": "rpo_interaction",
+  "angle_units": "rad",
+  "base_link": "base_link",
+  "collision_exclusions": [
+    [
+      "base_link",
+      "shoulder_pitch_link"
+    ],
+    [
+      "base_link",
+      "upper_arm"
+    ],
+    [
+      "shoulder_yaw_link",
+      "upper_arm"
+    ],
+    [
+      "forearm",
+      "wrist_pitch_link"
+    ],
+    [
+      "forearm",
+      "tool_link"
+    ],
+    [
+      "wrist_yaw_link",
+      "tool_link"
+    ]
+  ],
+  "configurations": [
+    {
+      "description": "Compact right-angle envelope for launch and far approach.",
+      "name": "stowed",
+      "positions": {
+        "elbow_pitch": 1.55,
+        "shoulder_pitch": -0.45,
+        "shoulder_roll": 0.0,
+        "shoulder_yaw": 0.0,
+        "wrist_pitch": -1.1,
+        "wrist_roll": 0.0,
+        "wrist_yaw": 0.0
+      }
+    },
+    {
+      "description": "Deployed configuration clear of the servicer bus.",
+      "name": "ready",
+      "positions": {
+        "elbow_pitch": 0.8,
+        "shoulder_pitch": -0.2,
+        "shoulder_roll": 0.0,
+        "shoulder_yaw": 0.0,
+        "wrist_pitch": -0.6,
+        "wrist_roll": 0.0,
+        "wrist_yaw": 0.0
+      }
+    },
+    {
+      "description": "Nearly aligned with the client grapple approach axis.",
+      "name": "pregrasp",
+      "positions": {
+        "elbow_pitch": 0.25,
+        "shoulder_pitch": -0.05,
+        "shoulder_roll": 0.0,
+        "shoulder_yaw": 0.0,
+        "wrist_pitch": -0.2,
+        "wrist_roll": 0.0,
+        "wrist_yaw": 0.0
+      }
+    },
+    {
+      "description": "Straight reference pose with the tool axis collinear with the target feature.",
+      "name": "capture",
+      "positions": {
+        "elbow_pitch": 0.0,
+        "shoulder_pitch": 0.0,
+        "shoulder_roll": 0.0,
+        "shoulder_yaw": 0.0,
+        "wrist_pitch": 0.0,
+        "wrist_roll": 0.0,
+        "wrist_yaw": 0.0
+      }
+    }
+  ],
+  "declared_reach_m": 2.3,
+  "frames": [
+    {
+      "accuracy": "estimated",
+      "name": "arm_base",
+      "origin_rpy_rad": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "origin_xyz_m": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "parent_link": "base_link",
+      "role": "base"
+    },
+    {
+      "accuracy": "estimated",
+      "name": "force_torque_sensor",
+      "origin_rpy_rad": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "origin_xyz_m": [
+        0.08,
+        0.0,
+        0.0
+      ],
+      "parent_link": "tool_link",
+      "role": "force_torque"
+    },
+    {
+      "accuracy": "estimated",
+      "name": "tool_center_point",
+      "origin_rpy_rad": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "origin_xyz_m": [
+        0.15,
+        0.0,
+        0.0
+      ],
+      "parent_link": "tool_link",
+      "role": "tool_center_point"
+    },
+    {
+      "accuracy": "estimated",
+      "name": "end_effector",
+      "origin_rpy_rad": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "origin_xyz_m": [
+        0.2,
+        0.0,
+        0.0
+      ],
+      "parent_link": "tool_link",
+      "role": "end_effector"
+    }
+  ],
+  "joints": [
+    {
+      "accuracy": "reference",
+      "axis": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "child": "shoulder_yaw_link",
+      "home": 0.0,
+      "limit": {
+        "lower": -2.8,
+        "upper": 2.8,
+        "velocity": 0.35
+      },
+      "name": "shoulder_yaw",
+      "origin_rpy_rad": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "origin_xyz_m": [
+        0.0,
+        0.0,
+        0.15
+      ],
+      "parent": "base_link",
+      "type": "revolute"
+    },
+    {
+      "accuracy": "reference",
+      "axis": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "child": "shoulder_pitch_link",
+      "home": 0.0,
+      "limit": {
+        "lower": -2.8,
+        "upper": 2.8,
+        "velocity": 0.35
+      },
+      "name": "shoulder_pitch",
+      "origin_rpy_rad": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "origin_xyz_m": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "parent": "shoulder_yaw_link",
+      "type": "revolute"
+    },
+    {
+      "accuracy": "reference",
+      "axis": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "child": "upper_arm",
+      "home": 0.0,
+      "limit": {
+        "lower": -2.8,
+        "upper": 2.8,
+        "velocity": 0.35
+      },
+      "name": "shoulder_roll",
+      "origin_rpy_rad": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "origin_xyz_m": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "parent": "shoulder_pitch_link",
+      "type": "revolute"
+    },
+    {
+      "accuracy": "reference",
+      "axis": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "child": "forearm",
+      "home": 0.0,
+      "limit": {
+        "lower": -2.7,
+        "upper": 2.7,
+        "velocity": 0.35
+      },
+      "name": "elbow_pitch",
+      "origin_rpy_rad": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "origin_xyz_m": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "parent": "upper_arm",
+      "type": "revolute"
+    },
+    {
+      "accuracy": "reference",
+      "axis": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "child": "wrist_yaw_link",
+      "home": 0.0,
+      "limit": {
+        "lower": -2.8,
+        "upper": 2.8,
+        "velocity": 0.5
+      },
+      "name": "wrist_yaw",
+      "origin_rpy_rad": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "origin_xyz_m": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "parent": "forearm",
+      "type": "revolute"
+    },
+    {
+      "accuracy": "reference",
+      "axis": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "child": "wrist_pitch_link",
+      "home": 0.0,
+      "limit": {
+        "lower": -2.8,
+        "upper": 2.8,
+        "velocity": 0.5
+      },
+      "name": "wrist_pitch",
+      "origin_rpy_rad": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "origin_xyz_m": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "parent": "wrist_yaw_link",
+      "type": "revolute"
+    },
+    {
+      "accuracy": "reference",
+      "axis": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "child": "tool_link",
+      "home": 0.0,
+      "limit": {
+        "lower": -3.0,
+        "upper": 3.0,
+        "velocity": 0.6
+      },
+      "name": "wrist_roll",
+      "origin_rpy_rad": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "origin_xyz_m": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "parent": "wrist_pitch_link",
+      "type": "revolute"
+    }
+  ],
+  "length_units": "m",
+  "links": [
+    {
+      "collision": [
+        {
+          "basis": {
+            "accuracy": "estimated",
+            "source": "visual envelope",
+            "uncertainty_m": 0.03
+          },
+          "dimensions_m": null,
+          "kind": "sphere",
+          "length_m": null,
+          "name": "base_envelope",
+          "origin_rpy_rad": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "origin_xyz_m": [
+            0.0,
+            0.0,
+            0.04
+          ],
+          "radius_m": 0.23
+        }
+      ],
+      "name": "base_link",
+      "visuals": [
+        {
+          "basis": {
+            "accuracy": "estimated",
+            "source": "NASA cleanroom imagery",
+            "uncertainty_m": 0.03
+          },
+          "dimensions_m": null,
+          "kind": "cylinder",
+          "length_m": 0.15,
+          "material": "thruster_metal",
+          "origin_rpy_rad": [
+            0.0,
+            -1.5707963267948966,
+            0.0
+          ],
+          "origin_xyz_m": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "radius_m": 0.18
+        },
+        {
+          "basis": {
+            "accuracy": "estimated",
+            "source": "servicer mounting envelope",
+            "uncertainty_m": 0.04
+          },
+          "dimensions_m": [
+            0.42,
+            0.42,
+            0.08
+          ],
+          "kind": "box",
+          "length_m": null,
+          "material": "carbon_fiber_dark",
+          "origin_rpy_rad": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "origin_xyz_m": [
+            0.0,
+            0.0,
+            -0.04
+          ],
+          "radius_m": null
+        }
+      ]
+    },
+    {
+      "collision": [
+        {
+          "basis": {
+            "accuracy": "estimated",
+            "source": "visual envelope",
+            "uncertainty_m": 0.02
+          },
+          "dimensions_m": null,
+          "kind": "sphere",
+          "length_m": null,
+          "name": "shoulder_yaw_envelope",
+          "origin_rpy_rad": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "origin_xyz_m": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "radius_m": 0.17
+        }
+      ],
+      "name": "shoulder_yaw_link",
+      "visuals": [
+        {
+          "basis": {
+            "accuracy": "estimated",
+            "source": "NASA shoulder actuator imagery",
+            "uncertainty_m": 0.025
+          },
+          "dimensions_m": null,
+          "kind": "sphere",
+          "length_m": null,
+          "material": "matte_white",
+          "origin_rpy_rad": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "origin_xyz_m": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "radius_m": 0.155
+        },
+        {
+          "basis": {
+            "accuracy": "estimated",
+            "source": "shoulder actuator stack",
+            "uncertainty_m": 0.02
+          },
+          "dimensions_m": null,
+          "kind": "cylinder",
+          "length_m": 0.18,
+          "material": "thruster_metal",
+          "origin_rpy_rad": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "origin_xyz_m": [
+            -0.09,
+            0.0,
+            0.0
+          ],
+          "radius_m": 0.095
+        }
+      ]
+    },
+    {
+      "collision": [
+        {
+          "basis": {
+            "accuracy": "estimated",
+            "source": "visual envelope",
+            "uncertainty_m": 0.02
+          },
+          "dimensions_m": null,
+          "kind": "sphere",
+          "length_m": null,
+          "name": "shoulder_pitch_envelope",
+          "origin_rpy_rad": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "origin_xyz_m": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "radius_m": 0.16
+        }
+      ],
+      "name": "shoulder_pitch_link",
+      "visuals": [
+        {
+          "basis": {
+            "accuracy": "estimated",
+            "source": "three-axis shoulder topology",
+            "uncertainty_m": 0.025
+          },
+          "dimensions_m": null,
+          "kind": "sphere",
+          "length_m": null,
+          "material": "matte_white",
+          "origin_rpy_rad": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "origin_xyz_m": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "radius_m": 0.145
+        },
+        {
+          "basis": {
+            "accuracy": "estimated",
+            "source": "visible joint collar",
+            "uncertainty_m": 0.015
+          },
+          "dimensions_m": null,
+          "kind": "cylinder",
+          "length_m": 0.08,
+          "material": "copper",
+          "origin_rpy_rad": [
+            0.0,
+            0.0,
+            1.5707963267948966
+          ],
+          "origin_xyz_m": [
+            -0.04,
+            0.0,
+            0.0
+          ],
+          "radius_m": 0.105
+        }
+      ]
+    },
+    {
+      "collision": [
+        {
+          "basis": {
+            "accuracy": "estimated",
+            "source": "visual envelope",
+            "uncertainty_m": 0.025
+          },
+          "dimensions_m": null,
+          "kind": "capsule",
+          "length_m": 0.84,
+          "name": "upper_arm_capsule",
+          "origin_rpy_rad": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "origin_xyz_m": [
+            0.08,
+            0.0,
+            0.0
+          ],
+          "radius_m": 0.09
+        }
+      ],
+      "name": "upper_arm",
+      "visuals": [
+        {
+          "basis": {
+            "accuracy": "estimated",
+            "source": "three-axis shoulder topology",
+            "uncertainty_m": 0.02
+          },
+          "dimensions_m": null,
+          "kind": "sphere",
+          "length_m": null,
+          "material": "matte_white",
+          "origin_rpy_rad": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "origin_xyz_m": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "radius_m": 0.135
+        },
+        {
+          "basis": {
+            "accuracy": "estimated",
+            "source": "2.3 m total reach allocation",
+            "uncertainty_m": 0.04
+          },
+          "dimensions_m": null,
+          "kind": "capsule",
+          "length_m": 0.8,
+          "material": "matte_white",
+          "origin_rpy_rad": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "origin_xyz_m": [
+            0.1,
+            0.0,
+            0.0
+          ],
+          "radius_m": 0.075
+        },
+        {
+          "basis": {
+            "accuracy": "estimated",
+            "source": "flex-harness guard",
+            "uncertainty_m": 0.02
+          },
+          "dimensions_m": [
+            0.55,
+            0.08,
+            0.025
+          ],
+          "kind": "box",
+          "length_m": null,
+          "material": "carbon_fiber_dark",
+          "origin_rpy_rad": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "origin_xyz_m": [
+            0.5,
+            0.0,
+            -0.082
+          ],
+          "radius_m": null
+        }
+      ]
+    },
+    {
+      "collision": [
+        {
+          "basis": {
+            "accuracy": "estimated",
+            "source": "visual envelope",
+            "uncertainty_m": 0.025
+          },
+          "dimensions_m": null,
+          "kind": "capsule",
+          "length_m": 0.84,
+          "name": "forearm_capsule",
+          "origin_rpy_rad": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "origin_xyz_m": [
+            0.08,
+            0.0,
+            0.0
+          ],
+          "radius_m": 0.085
+        }
+      ],
+      "name": "forearm",
+      "visuals": [
+        {
+          "basis": {
+            "accuracy": "estimated",
+            "source": "elbow actuator imagery",
+            "uncertainty_m": 0.025
+          },
+          "dimensions_m": null,
+          "kind": "sphere",
+          "length_m": null,
+          "material": "matte_white",
+          "origin_rpy_rad": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "origin_xyz_m": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "radius_m": 0.14
+        },
+        {
+          "basis": {
+            "accuracy": "estimated",
+            "source": "elbow pitch actuator",
+            "uncertainty_m": 0.015
+          },
+          "dimensions_m": null,
+          "kind": "cylinder",
+          "length_m": 0.09,
+          "material": "copper",
+          "origin_rpy_rad": [
+            0.0,
+            0.0,
+            1.5707963267948966
+          ],
+          "origin_xyz_m": [
+            -0.045,
+            0.0,
+            0.0
+          ],
+          "radius_m": 0.105
+        },
+        {
+          "basis": {
+            "accuracy": "estimated",
+            "source": "2.3 m total reach allocation",
+            "uncertainty_m": 0.04
+          },
+          "dimensions_m": null,
+          "kind": "capsule",
+          "length_m": 0.8,
+          "material": "matte_white",
+          "origin_rpy_rad": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "origin_xyz_m": [
+            0.1,
+            0.0,
+            0.0
+          ],
+          "radius_m": 0.068
+        },
+        {
+          "basis": {
+            "accuracy": "estimated",
+            "source": "flex-harness guard",
+            "uncertainty_m": 0.02
+          },
+          "dimensions_m": [
+            0.55,
+            0.07,
+            0.022
+          ],
+          "kind": "box",
+          "length_m": null,
+          "material": "carbon_fiber_dark",
+          "origin_rpy_rad": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "origin_xyz_m": [
+            0.5,
+            0.0,
+            -0.076
+          ],
+          "radius_m": null
+        }
+      ]
+    },
+    {
+      "collision": [
+        {
+          "basis": {
+            "accuracy": "estimated",
+            "source": "visual envelope",
+            "uncertainty_m": 0.02
+          },
+          "dimensions_m": null,
+          "kind": "sphere",
+          "length_m": null,
+          "name": "wrist_yaw_envelope",
+          "origin_rpy_rad": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "origin_xyz_m": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "radius_m": 0.14
+        }
+      ],
+      "name": "wrist_yaw_link",
+      "visuals": [
+        {
+          "basis": {
+            "accuracy": "estimated",
+            "source": "three-axis spherical wrist",
+            "uncertainty_m": 0.02
+          },
+          "dimensions_m": null,
+          "kind": "sphere",
+          "length_m": null,
+          "material": "matte_white",
+          "origin_rpy_rad": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "origin_xyz_m": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "radius_m": 0.125
+        },
+        {
+          "basis": {
+            "accuracy": "estimated",
+            "source": "wrist actuator stack",
+            "uncertainty_m": 0.02
+          },
+          "dimensions_m": null,
+          "kind": "cylinder",
+          "length_m": 0.14,
+          "material": "thruster_metal",
+          "origin_rpy_rad": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "origin_xyz_m": [
+            -0.07,
+            0.0,
+            0.0
+          ],
+          "radius_m": 0.085
+        }
+      ]
+    },
+    {
+      "collision": [
+        {
+          "basis": {
+            "accuracy": "estimated",
+            "source": "visual envelope",
+            "uncertainty_m": 0.02
+          },
+          "dimensions_m": null,
+          "kind": "sphere",
+          "length_m": null,
+          "name": "wrist_pitch_envelope",
+          "origin_rpy_rad": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "origin_xyz_m": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "radius_m": 0.13
+        }
+      ],
+      "name": "wrist_pitch_link",
+      "visuals": [
+        {
+          "basis": {
+            "accuracy": "estimated",
+            "source": "three-axis spherical wrist",
+            "uncertainty_m": 0.02
+          },
+          "dimensions_m": null,
+          "kind": "sphere",
+          "length_m": null,
+          "material": "matte_white",
+          "origin_rpy_rad": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "origin_xyz_m": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "radius_m": 0.115
+        },
+        {
+          "basis": {
+            "accuracy": "estimated",
+            "source": "visible joint collar",
+            "uncertainty_m": 0.015
+          },
+          "dimensions_m": null,
+          "kind": "cylinder",
+          "length_m": 0.07,
+          "material": "copper",
+          "origin_rpy_rad": [
+            0.0,
+            0.0,
+            1.5707963267948966
+          ],
+          "origin_xyz_m": [
+            -0.035,
+            0.0,
+            0.0
+          ],
+          "radius_m": 0.082
+        }
+      ]
+    },
+    {
+      "collision": [
+        {
+          "basis": {
+            "accuracy": "estimated",
+            "source": "visual envelope",
+            "uncertainty_m": 0.02
+          },
+          "dimensions_m": null,
+          "kind": "sphere",
+          "length_m": null,
+          "name": "wrist_roll_envelope",
+          "origin_rpy_rad": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "origin_xyz_m": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "radius_m": 0.12
+        },
+        {
+          "basis": {
+            "accuracy": "estimated",
+            "source": "end effector swept envelope",
+            "uncertainty_m": 0.025
+          },
+          "dimensions_m": null,
+          "kind": "capsule",
+          "length_m": 0.16,
+          "name": "tool_envelope",
+          "origin_rpy_rad": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "origin_xyz_m": [
+            0.04,
+            0.0,
+            0.0
+          ],
+          "radius_m": 0.1
+        }
+      ],
+      "name": "tool_link",
+      "visuals": [
+        {
+          "basis": {
+            "accuracy": "estimated",
+            "source": "three-axis spherical wrist",
+            "uncertainty_m": 0.02
+          },
+          "dimensions_m": null,
+          "kind": "sphere",
+          "length_m": null,
+          "material": "matte_white",
+          "origin_rpy_rad": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "origin_xyz_m": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "radius_m": 0.105
+        },
+        {
+          "basis": {
+            "accuracy": "estimated",
+            "source": "six-axis force torque sensor",
+            "uncertainty_m": 0.015
+          },
+          "dimensions_m": null,
+          "kind": "capsule",
+          "length_m": 0.1,
+          "material": "thruster_metal",
+          "origin_rpy_rad": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "origin_xyz_m": [
+            0.02,
+            0.0,
+            0.0
+          ],
+          "radius_m": 0.055
+        },
+        {
+          "basis": {
+            "accuracy": "estimated",
+            "source": "tool flange envelope",
+            "uncertainty_m": 0.02
+          },
+          "dimensions_m": [
+            0.07,
+            0.18,
+            0.18
+          ],
+          "kind": "box",
+          "length_m": null,
+          "material": "carbon_fiber_dark",
+          "origin_rpy_rad": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "origin_xyz_m": [
+            0.145,
+            0.0,
+            0.0
+          ],
+          "radius_m": null
+        },
+        {
+          "basis": {
+            "accuracy": "estimated",
+            "source": "dual-finger end effector",
+            "uncertainty_m": 0.02
+          },
+          "dimensions_m": [
+            0.13,
+            0.035,
+            0.045
+          ],
+          "kind": "box",
+          "length_m": null,
+          "material": "thruster_metal",
+          "origin_rpy_rad": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "origin_xyz_m": [
+            0.19,
+            0.075,
+            0.0
+          ],
+          "radius_m": null
+        },
+        {
+          "basis": {
+            "accuracy": "estimated",
+            "source": "dual-finger end effector",
+            "uncertainty_m": 0.02
+          },
+          "dimensions_m": [
+            0.13,
+            0.035,
+            0.045
+          ],
+          "kind": "box",
+          "length_m": null,
+          "material": "thruster_metal",
+          "origin_rpy_rad": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "origin_xyz_m": [
+            0.19,
+            -0.075,
+            0.0
+          ],
+          "radius_m": null
+        }
+      ]
+    }
+  ],
+  "name": "restore_l_class_servicing_arm",
+  "provenance": {
+    "model_scope": "class_proxy",
+    "not_official_model": true,
+    "source_basis": "NASA public 2-meter-class Restore-L/OSAM robotic servicing arm topology and published 2.3 m FREND-class reach; unpublished link splits, section diameters, and limits estimated.",
+    "sources": [
+      "https://svs.gsfc.nasa.gov/12023/",
+      "https://www.nasa.gov/isam/robotic-servicing-arm/",
+      "https://ntrs.nasa.gov/api/citations/20210020506/downloads/Grappling_Spacecraft%20Paper%20Final.pdf"
+    ]
+  },
+  "schema_version": "robot/v1",
+  "tool_frame": "tool_center_point"
+}

@@ -1,0 +1,49 @@
+{
+  "background": [
+    0.004,
+    0.006,
+    0.01
+  ],
+  "description": "Checked-in orbital lighting rig for RPO hero scenes (Phase 4).",
+  "earthshine": {
+    "color": [
+      0.05,
+      0.13,
+      0.3
+    ],
+    "energy": 1.6,
+    "from_direction": [
+      -1.0,
+      0.0,
+      0.0
+    ]
+  },
+  "rim": {
+    "color": [
+      0.6,
+      0.72,
+      1.0
+    ],
+    "direction": [
+      -0.5,
+      -0.6,
+      0.4
+    ],
+    "energy": 1.5
+  },
+  "schema_version": "space_lighting/v1",
+  "sun": {
+    "angle_rad": 0.02,
+    "color": [
+      1.0,
+      0.96,
+      0.9
+    ],
+    "direction": [
+      0.55,
+      0.5,
+      0.35
+    ],
+    "energy": 9.0
+  }
+}

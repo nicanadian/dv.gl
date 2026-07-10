@@ -1,0 +1,112 @@
+{
+  "passed": true,
+  "robot": {
+    "bytes": 1017904,
+    "materials": 4,
+    "meshes": 22,
+    "nodes": 49,
+    "path": "models/robot.high.glb",
+    "primitives": 22,
+    "textures": 3,
+    "triangles": 13668
+  },
+  "schema_version": "rpo_browser_budget/v1",
+  "tiers": {
+    "high": {
+      "assets": {
+        "chaser": {
+          "bytes": 543096,
+          "materials": 6,
+          "meshes": 19,
+          "nodes": 29,
+          "path": "models/chaser.high.glb",
+          "primitives": 22,
+          "sha256": "725c1bdcd4e164fccdad5297be6f64348ab4d393bc5cab9e37619a19c9938d61",
+          "textures": 9,
+          "triangles": 2788
+        },
+        "client": {
+          "bytes": 561296,
+          "materials": 5,
+          "meshes": 15,
+          "nodes": 24,
+          "path": "models/client.high.glb",
+          "primitives": 18,
+          "sha256": "a8c46a094af87ebead38e6681aabcf3b3670ffb5b2129d08e0591ee30bc13c89",
+          "textures": 9,
+          "triangles": 2996
+        }
+      },
+      "geometry_distinct_from_higher": true,
+      "maximum_bytes": 12000000,
+      "maximum_triangles": 250000,
+      "passed": true,
+      "total_bytes": 1104392,
+      "total_triangles": 5784
+    },
+    "low": {
+      "assets": {
+        "chaser": {
+          "bytes": 366844,
+          "materials": 5,
+          "meshes": 8,
+          "nodes": 18,
+          "path": "models/chaser.low.glb",
+          "primitives": 9,
+          "sha256": "ab6a034db988d9a715ec0d1440d0c72ca22f4c7bf1e795dee03c9857e1906966",
+          "textures": 6,
+          "triangles": 332
+        },
+        "client": {
+          "bytes": 424448,
+          "materials": 5,
+          "meshes": 7,
+          "nodes": 16,
+          "path": "models/client.low.glb",
+          "primitives": 8,
+          "sha256": "5af8fa90ceb1ffe7f912bde522f01af7a9bba59c1ef587d834128d4444c491ab",
+          "textures": 9,
+          "triangles": 792
+        }
+      },
+      "geometry_distinct_from_higher": true,
+      "maximum_bytes": 4000000,
+      "maximum_triangles": 60000,
+      "passed": true,
+      "total_bytes": 791292,
+      "total_triangles": 1124
+    },
+    "medium": {
+      "assets": {
+        "chaser": {
+          "bytes": 479536,
+          "materials": 6,
+          "meshes": 16,
+          "nodes": 26,
+          "path": "models/chaser.medium.glb",
+          "primitives": 19,
+          "sha256": "d1a16447ce003acbad7add52aa451c63124c6cf976b536dd1f9313020d8f5251",
+          "textures": 9,
+          "triangles": 1652
+        },
+        "client": {
+          "bytes": 490888,
+          "materials": 5,
+          "meshes": 13,
+          "nodes": 22,
+          "path": "models/client.medium.glb",
+          "primitives": 16,
+          "sha256": "78eb777d5549b7f95e1b319479ed9c0a19bb8a39ba23fbea5b25cb770cdec19c",
+          "textures": 9,
+          "triangles": 1832
+        }
+      },
+      "geometry_distinct_from_higher": true,
+      "maximum_bytes": 7000000,
+      "maximum_triangles": 120000,
+      "passed": true,
+      "total_bytes": 970424,
+      "total_triangles": 3484
+    }
+  }
+}

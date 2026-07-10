@@ -1,0 +1,17 @@
+{
+  "accuracy_tier": "rpo_interaction",
+  "archetype": "robotic_servicing_arm",
+  "collision_document": "restore_l_class_servicing_arm.collision.json",
+  "configuration": "ready",
+  "declared_reach_m": 2.3,
+  "generation_method": "dimensioned_robot_v1",
+  "generator_version": "0.1.0",
+  "joint_count": 7,
+  "link_count": 8,
+  "model_name": "restore_l_class_servicing_arm",
+  "model_scope": "class_proxy",
+  "not_official_model": true,
+  "robot_document": "restore_l_class_servicing_arm.robot.json",
+  "source_basis": "NASA public 2-meter-class Restore-L/OSAM robotic servicing arm topology and published 2.3 m FREND-class reach; unpublished link splits, section diameters, and limits estimated.",
+  "visual_accuracy": "interaction_proxy"
+}

@@ -1,0 +1,40 @@
+{
+  "animation": {
+    "fps": 24,
+    "frames_per_sample": 6
+  },
+  "configs": {
+    "chaser": {
+      "arm_stowed": false,
+      "arrays_deployed": true,
+      "external_assets": [
+        {
+          "base_frame": "arm_base",
+          "collision_document": "metadata/robot-collision.json",
+          "configuration": "ready",
+          "notes": "Dimensioned servicing-arm class visual proxy.",
+          "robot_document": "metadata/robot.json",
+          "role": "robot_arm",
+          "stowed": false,
+          "uri": "models/robot.high.glb"
+        }
+      ]
+    },
+    "client": {
+      "array_angle_deg": 5.0,
+      "arrays_deployed": true
+    }
+  },
+  "default_phase": "propagated",
+  "description": "Unchanged pdb dual-free-flyer output differenced by Sublime Kinematics into replay/1.0.",
+  "id": "pdb_native_reference_001",
+  "keep_out_margin_m": 10.0,
+  "label": "Native pdb proximity reference",
+  "lighting": "config/lighting.json",
+  "pair": {
+    "chaser_glb": "models/chaser.high.glb",
+    "client_glb": "models/client.high.glb"
+  },
+  "replay": "replay/approach.json",
+  "schema_version": "rpo_scenario/v1"
+}

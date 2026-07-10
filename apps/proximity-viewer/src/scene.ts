@@ -76,7 +76,10 @@ export class ProximityScene {
   private focusMode: FocusMode = "overview";
   private selectionHandler?: (role: VehicleRole) => void;
 
-  constructor(private readonly host: HTMLElement) {
+  constructor(
+    private readonly host: HTMLElement,
+    private readonly keepOutRadiusM: number,
+  ) {
     this.renderer = new THREE.WebGLRenderer({
       antialias: true,
       alpha: false,
@@ -234,7 +237,7 @@ export class ProximityScene {
 
   private buildEnvelope(): void {
     const keepOut = new THREE.Mesh(
-      new THREE.SphereGeometry(2.5, 28, 18),
+      new THREE.SphereGeometry(this.keepOutRadiusM, 28, 18),
       new THREE.MeshBasicMaterial({
         color: COLORS.keepOut,
         wireframe: true,

@@ -1,0 +1,258 @@
+{
+  "camera": {
+    "lens_mm": 85.0,
+    "look_at": [
+      125.0,
+      0.0,
+      0.0
+    ],
+    "position": [
+      908.5765407153333,
+      0.0,
+      241.1004740662564
+    ]
+  },
+  "frame": "LVLH_RIC",
+  "keep_out": {
+    "center": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "kind": "sphere",
+    "margin_m": 10.0
+  },
+  "lighting": {
+    "background": [
+      0.004,
+      0.006,
+      0.01
+    ],
+    "description": "Checked-in orbital lighting rig for RPO hero scenes (Phase 4).",
+    "earthshine": {
+      "color": [
+        0.05,
+        0.13,
+        0.3
+      ],
+      "energy": 1.6,
+      "from_direction": [
+        -1.0,
+        0.0,
+        0.0
+      ]
+    },
+    "rim": {
+      "color": [
+        0.6,
+        0.72,
+        1.0
+      ],
+      "direction": [
+        -0.5,
+        -0.6,
+        0.4
+      ],
+      "energy": 1.5
+    },
+    "schema_version": "space_lighting/v1",
+    "sun": {
+      "angle_rad": 0.02,
+      "color": [
+        1.0,
+        0.96,
+        0.9
+      ],
+      "direction": [
+        0.55,
+        0.5,
+        0.35
+      ],
+      "energy": 9.0
+    }
+  },
+  "provenance": {
+    "absolute_source": {
+      "chaser_ephemeris_ref": "chaser/ephemeris.json",
+      "ephemeris_ref": "target/ephemeris.json",
+      "gate_id": "gate_pdb_proximity_reference_001",
+      "producer": "pdb",
+      "run_id": "pdb_proximity_reference_001",
+      "target_ephemeris_ref": "target/ephemeris.json"
+    },
+    "contract_id": "sk_proximity_tier0_contract",
+    "corridor_ok_end": true,
+    "corridor_ok_start": true,
+    "epoch": "2026-07-10T00:00:00.000Z",
+    "frame": "LVLH_RIC",
+    "keep_out_margin_m": 10.0,
+    "mission_id": "pdb_sk_proximity_reference_001",
+    "not_official_model": true,
+    "pair_label": "Native pdb proximity reference",
+    "phase_span": "propagated -> propagated",
+    "scenario_id": "pdb_native_reference_001",
+    "separation_end_m": 121.874,
+    "separation_start_m": 250.0
+  },
+  "render": {
+    "resolution": [
+      1280,
+      960
+    ],
+    "samples": 32,
+    "view_transform": "AgX"
+  },
+  "schema_version": "scene_plan/v1",
+  "timeline": {
+    "fps": 24,
+    "frame_end": 61,
+    "frame_start": 1
+  },
+  "units": "meters",
+  "vehicles": [
+    {
+      "aim_at": null,
+      "arrays_deployed": true,
+      "config": {
+        "array_angle_deg": 5.0,
+        "arrays_deployed": true
+      },
+      "glb": "models/client.high.glb",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "role": "client"
+    },
+    {
+      "aim_at": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "arm_stowed": false,
+      "arrays_deployed": true,
+      "config": {
+        "arm_stowed": false,
+        "arrays_deployed": true,
+        "external_assets": [
+          {
+            "base_frame": "arm_base",
+            "collision_document": "metadata/robot-collision.json",
+            "configuration": "ready",
+            "notes": "Dimensioned servicing-arm class visual proxy.",
+            "robot_document": "metadata/robot.json",
+            "role": "robot_arm",
+            "stowed": false,
+            "uri": "models/robot.high.glb"
+          }
+        ]
+      },
+      "external_assets": [
+        {
+          "base_frame": "arm_base",
+          "collision_document": "metadata/robot-collision.json",
+          "configuration": "ready",
+          "notes": "Dimensioned servicing-arm class visual proxy.",
+          "robot_document": "metadata/robot.json",
+          "role": "robot_arm",
+          "stowed": false,
+          "uri": "models/robot.high.glb"
+        }
+      ],
+      "glb": "models/chaser.high.glb",
+      "role": "chaser",
+      "track": [
+        {
+          "frame": 1,
+          "position": [
+            250.0,
+            0.0,
+            -0.0
+          ]
+        },
+        {
+          "frame": 7,
+          "position": [
+            229.56940672030623,
+            15.232248509101428,
+            0.0
+          ]
+        },
+        {
+          "frame": 13,
+          "position": [
+            210.33650149466698,
+            27.82968227671065,
+            0.0
+          ]
+        },
+        {
+          "frame": 19,
+          "position": [
+            192.38562232760108,
+            37.957071628676424,
+            0.0
+          ]
+        },
+        {
+          "frame": 25,
+          "position": [
+            175.79550247244018,
+            45.78998414545236,
+            0.0
+          ]
+        },
+        {
+          "frame": 31,
+          "position": [
+            160.63893243551504,
+            51.51402796165137,
+            0.0
+          ]
+        },
+        {
+          "frame": 37,
+          "position": [
+            146.98244641538292,
+            55.324052355807744,
+            0.0
+          ]
+        },
+        {
+          "frame": 43,
+          "position": [
+            134.88603441688335,
+            57.4233087586035,
+            0.0
+          ]
+        },
+        {
+          "frame": 49,
+          "position": [
+            124.40288122619774,
+            58.02257547526067,
+            0.0
+          ]
+        },
+        {
+          "frame": 55,
+          "position": [
+            115.57913332550906,
+            57.3392495472234,
+            0.0
+          ]
+        },
+        {
+          "frame": 61,
+          "position": [
+            108.45369476271516,
+            55.59640932824204,
+            0.0
+          ]
+        }
+      ]
+    }
+  ]
+}

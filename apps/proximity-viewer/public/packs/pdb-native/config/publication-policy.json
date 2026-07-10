@@ -1,0 +1,25 @@
+{
+  "attribution_text": "Procedural visual proxies from gltf-model-builder; motion evidence from pdb and Sublime Kinematics; no official vendor geometry.",
+  "browser_budgets": {
+    "high": {
+      "maximum_bytes": 12000000,
+      "maximum_triangles": 250000
+    },
+    "low": {
+      "maximum_bytes": 4000000,
+      "maximum_triangles": 60000
+    },
+    "medium": {
+      "maximum_bytes": 7000000,
+      "maximum_triangles": 120000
+    }
+  },
+  "license_label": "Internal evaluation proxy assets",
+  "license_url": null,
+  "minimum_accuracy_tier": "rpo_presentation",
+  "not_official_model_required": true,
+  "pack_id": "pdb_native_reference_001",
+  "redistribution": "internal_only",
+  "schema_version": "rpo_pack_policy/v1",
+  "version": "1.0.0"
+}

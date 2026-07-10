@@ -22,6 +22,14 @@ import {
   ProximityScene,
   type VehicleRole,
 } from "./scene.js";
+import {
+  type PackModel,
+  packAssetUrl,
+  packFileDigest,
+  parsePackScenario,
+  parseViewerPack,
+  type ViewerPack,
+} from "./viewerPack.js";
 
 interface AssetMetadata {
   readonly model_name: string;
@@ -40,15 +48,8 @@ interface ViewerAsset {
   readonly metadata: AssetMetadata;
 }
 
-interface AssetManifest {
-  readonly schema_version: "dvgl/proximity-assets/0.1";
-  readonly authority: "visual_only";
-  readonly source_repository: string;
-  readonly models: readonly ViewerAsset[];
-}
-
 const ICONS = { ChevronLeft, ChevronRight, CircleDot, Focus, Pause, Play, RotateCcw };
-const KEEP_OUT_RADIUS_M = 2.5;
+const PACK_ROOT = "/packs/pdb-native";
 
 function element<T extends Element>(selector: string): T {
   const found = document.querySelector<T>(selector);
@@ -62,28 +63,22 @@ async function fetchJson(path: string): Promise<unknown> {
   return response.json();
 }
 
-function parseAssetManifest(value: unknown): AssetManifest {
-  if (typeof value !== "object" || value === null) throw new Error("asset manifest is invalid");
-  const candidate = value as Partial<AssetManifest>;
-  if (
-    candidate.schema_version !== "dvgl/proximity-assets/0.1" ||
-    candidate.authority !== "visual_only" ||
-    !Array.isArray(candidate.models) ||
-    candidate.models.length < 2
-  ) {
-    throw new Error("asset manifest contract mismatch");
-  }
-  for (const model of candidate.models) {
-    if (
-      typeof model.id !== "string" ||
-      typeof model.uri !== "string" ||
-      (model.role !== "target" && model.role !== "chaser") ||
-      model.metadata.not_official_model !== true
-    ) {
-      throw new Error("asset manifest contains an unsafe or malformed model entry");
-    }
-  }
-  return candidate as AssetManifest;
+function viewerAsset(pack: ViewerPack, role: VehicleRole, model: PackModel): ViewerAsset {
+  const path = model.tiers.high;
+  return {
+    id: role,
+    label: model.name,
+    role,
+    uri: packAssetUrl(PACK_ROOT, path),
+    sha256: packFileDigest(pack, path),
+    metadata: {
+      model_name: model.name,
+      archetype: role,
+      accuracy_tier: model.accuracy_tier,
+      source_basis: model.source_basis,
+      not_official_model: model.not_official_model,
+    },
+  };
 }
 
 function formatPhase(phase: string): string {
@@ -220,12 +215,13 @@ async function start(): Promise<void> {
   element<HTMLElement>("#app").innerHTML = appMarkup();
   renderIcons();
 
-  const [replayValue, manifestValue] = await Promise.all([
-    fetchJson("/data/replay.json"),
-    fetchJson("/data/assets.json"),
+  const pack = parseViewerPack(await fetchJson(`${PACK_ROOT}/pack.json`));
+  const [replayValue, scenarioValue] = await Promise.all([
+    fetchJson(packAssetUrl(PACK_ROOT, pack.scenes.replay)),
+    fetchJson(packAssetUrl(PACK_ROOT, pack.scenes.scenario)),
   ]);
   const replay = parseReplay(replayValue);
-  const manifest = parseAssetManifest(manifestValue);
+  const scenario = parsePackScenario(scenarioValue);
   const clock = new MissionClock({
     epochMs: replay.epochMs,
     windowSeconds: replay.durationSec,
@@ -239,12 +235,11 @@ async function start(): Promise<void> {
       label: formatPhase(sample.phase),
     })),
   );
-  const scene = new ProximityScene(element<HTMLElement>("#viewport"));
+  const scene = new ProximityScene(element<HTMLElement>("#viewport"), scenario.keepOutMarginM);
   scene.setReplay(replay);
 
-  const chaser = manifest.models.find((model) => model.role === "chaser");
-  const targets = manifest.models.filter((model) => model.role === "target");
-  if (!chaser || targets.length === 0) throw new Error("viewer asset roles are incomplete");
+  const chaser = viewerAsset(pack, "chaser", pack.models.chaser);
+  const targets = [viewerAsset(pack, "target", pack.models.client)];
   let target = targets[0] as ViewerAsset;
   let selected: VehicleRole = "chaser";
 
@@ -401,7 +396,7 @@ async function start(): Promise<void> {
     element<HTMLElement>("#intrack-position").textContent = `${state.position.y.toFixed(1)} m`;
     element<HTMLElement>("#cross-position").textContent = `${state.position.z.toFixed(1)} m`;
     const envelope = element<HTMLElement>("#envelope-state");
-    const clear = state.separationM >= KEEP_OUT_RADIUS_M;
+    const clear = state.separationM >= scenario.keepOutMarginM;
     envelope.textContent = clear ? "Outside keep-out" : "Keep-out violation";
     envelope.classList.toggle("rejected", !clear);
     phaseTimeline.querySelectorAll<HTMLButtonElement>("button").forEach((button) => {
