@@ -56,9 +56,13 @@ for (const model of models) {
 
 for (const file of models.map((model) => model.file)) {
   const stem = file.replace(/\.glb$/, "");
-  for (const suffix of [".blend", ".blend1", ".blend2", ".plan.json"]) {
+  for (const suffix of [".blend", ".blend1", ".blend2", ".plan.json", ".manifest.json"]) {
     rmSync(join(outputDir, `${stem}${suffix}`), { force: true });
   }
+  const metadataPath = join(outputDir, `${stem}.metadata.json`);
+  const metadata = JSON.parse(readFileSync(metadataPath, "utf8"));
+  delete metadata.generated_at;
+  writeFileSync(metadataPath, `${JSON.stringify(metadata, null, 2)}\n`);
 }
 
 const replaySource = join(builderRoot, "data/fixtures/rpo/vbar_terminal_approach.replay.json");

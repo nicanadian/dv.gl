@@ -8,12 +8,11 @@
   "origin_policy": "visual_center",
   "com_offset_m": [
     -0.1,
-    0.0,
-    0.0
+    0,
+    0
   ],
   "detail": "high",
   "not_official_model": true,
   "source_basis": "Generic GEO bus + class-typical ~47-inch MARMAN / LV adapter scale (docs/rpo_feature_dimensions.md). Estimated presentation proxy only.",
-  "generated_at": "2026-07-10T06:28:40.334836+00:00",
   "generator_version": "0.1.0"
 }

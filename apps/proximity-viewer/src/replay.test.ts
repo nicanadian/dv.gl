@@ -8,6 +8,7 @@ import { parseReplay, replayStateAt } from "./replay.js";
 
 const fixture = {
   schema_version: "replay/1.0",
+  frame_profile: "skframe/v1",
   frame: "LVLH_RIC",
   length_units: "m",
   velocity_units: "m/s",
@@ -35,10 +36,14 @@ describe("parseReplay", () => {
     const replay = parseReplay(fixture);
     expect(replay.durationSec).toBe(10);
     expect(replay.samples).toHaveLength(2);
+    expect(replay.frameProfile).toBe("skframe/v1");
     expect(replay.notOfficialModel).toBe(true);
   });
 
   it("fails closed on a wrong frame or non-increasing samples", () => {
+    expect(() => parseReplay({ ...fixture, frame_profile: "unknown/v1" })).toThrow(
+      "requires skframe/v1",
+    );
     expect(() => parseReplay({ ...fixture, frame: "ECI_J2000" })).toThrow("requires LVLH_RIC");
     const duplicateTime = structuredClone(fixture);
     const first = duplicateTime.samples[0];

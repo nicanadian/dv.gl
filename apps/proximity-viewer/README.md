@@ -34,7 +34,8 @@ Set `GLTF_MODEL_BUILDER_DIR` to override that location. The script:
 
 - Replay evidence supplies every relative transform; the viewer does not propagate a
   second trajectory.
-- Only `LVLH_RIC`, meters, meters/second, and strictly increasing replay samples load.
+- Only `skframe/v1`, `LVLH_RIC`, meters, meters/second, and strictly increasing
+  replay samples sharing the declared epoch load.
 - GLBs are `not_official_model: true` visual proxies.
 - Meshes do not define collision, keep-out, approach, attachment, or metrology truth.
 - The viewer has no admission, runtime-assurance, controller, actuator, or write-back API.

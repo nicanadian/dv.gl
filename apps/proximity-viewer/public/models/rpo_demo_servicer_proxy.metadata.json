@@ -8,12 +8,11 @@
   "origin_policy": "visual_center",
   "com_offset_m": [
     0.05,
-    0.0,
+    0,
     -0.05
   ],
   "detail": "high",
   "not_official_model": true,
   "source_basis": "Generic servicer-class bus; soft-capture docking ring is a generic class proxy (docs/rpo_feature_dimensions.md), not a proprietary docking system.",
-  "generated_at": "2026-07-10T06:28:39.634541+00:00",
   "generator_version": "0.1.0"
 }

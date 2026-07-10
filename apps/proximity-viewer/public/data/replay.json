@@ -1,5 +1,6 @@
 {
   "schema_version": "replay/1.0",
+  "frame_profile": "skframe/v1",
   "frame": "LVLH_RIC",
   "length_units": "m",
   "velocity_units": "m/s",

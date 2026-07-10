@@ -27,7 +27,6 @@
         "detail": "high",
         "not_official_model": true,
         "source_basis": "Generic servicer-class bus; soft-capture docking ring is a generic class proxy (docs/rpo_feature_dimensions.md), not a proprietary docking system.",
-        "generated_at": "2026-07-10T06:28:39.634541+00:00",
         "generator_version": "0.1.0"
       }
     },
@@ -55,7 +54,6 @@
         "detail": "high",
         "not_official_model": true,
         "source_basis": "Generic GEO bus + class-typical ~47-inch MARMAN / LV adapter scale (docs/rpo_feature_dimensions.md). Estimated presentation proxy only.",
-        "generated_at": "2026-07-10T06:28:40.334836+00:00",
         "generator_version": "0.1.0"
       }
     },
@@ -83,7 +81,6 @@
         "detail": "high",
         "not_official_model": true,
         "source_basis": "Small LEO bus proportions + generic dual-pin grapple pad class (docs/rpo_feature_dimensions.md). Presentation proxy only.",
-        "generated_at": "2026-07-10T06:28:41.142207+00:00",
         "generator_version": "0.1.0"
       }
     }

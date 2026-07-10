@@ -4,6 +4,7 @@
  */
 
 export const REPLAY_SCHEMA_VERSION = "replay/1.0";
+export const REPLAY_FRAME_PROFILE = "skframe/v1";
 export const REPLAY_FRAME = "LVLH_RIC";
 
 export interface RelativePosition {
@@ -21,6 +22,7 @@ export interface ReplaySample {
 
 export interface ParsedReplay {
   readonly schemaVersion: typeof REPLAY_SCHEMA_VERSION;
+  readonly frameProfile: typeof REPLAY_FRAME_PROFILE;
   readonly frame: typeof REPLAY_FRAME;
   readonly missionId: string;
   readonly contractId: string;
@@ -72,6 +74,9 @@ export function parseReplay(value: unknown): ParsedReplay {
   if (value.schema_version !== REPLAY_SCHEMA_VERSION) {
     throw new Error(`unsupported replay schema ${String(value.schema_version)}`);
   }
+  if (value.frame_profile !== REPLAY_FRAME_PROFILE) {
+    throw new Error(`proximity viewer requires ${REPLAY_FRAME_PROFILE}`);
+  }
   if (value.frame !== REPLAY_FRAME) {
     throw new Error(`proximity viewer requires ${REPLAY_FRAME}`);
   }
@@ -116,6 +121,7 @@ export function parseReplay(value: unknown): ParsedReplay {
   const absoluteSource = isRecord(value.absolute_source) ? value.absolute_source : {};
   return {
     schemaVersion: REPLAY_SCHEMA_VERSION,
+    frameProfile: REPLAY_FRAME_PROFILE,
     frame: REPLAY_FRAME,
     missionId: requiredString(value, "mission_id"),
     contractId: requiredString(value, "contract_id"),
