@@ -35,6 +35,8 @@ manifest; the viewer loads only that manifest and its referenced files.
 - `rpo_viewer_pack/v1` supplies the only replay/model paths and content digests.
 - Absolute ECI and relative LVLH modes are a hard presentation cut over the
   same pdb run, gate epoch, and deterministic mission clock.
+- Vehicle orientation comes from paired scalar-last pdb body-to-ECI attitude,
+  transformed into LVLH from the target absolute basis; no aim-at pose remains.
 - Only `skframe/v1`, `LVLH_RIC`, meters, meters/second, and strictly increasing
   replay samples sharing the declared epoch load.
 - GLBs are `not_official_model: true` visual proxies.

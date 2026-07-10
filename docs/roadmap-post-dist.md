@@ -126,6 +126,11 @@ metrology or collision truth from render meshes. This item depends on the corres
 asset-pack and robotics export work in `gltf-model-builder`; until then the chaser uses an
 explicit viewer-only aim-at pose. **Deps.** S1a and glTF consumer-pack tickets.
 
+**Attitude sub-step done 2026-07-10.** Native pdb NADIR body-to-ECI scalar-last
+quaternions now survive SK replay and the viewer pack. The app derives
+body-to-LVLH from the target absolute basis and no longer uses an aim-at pose.
+Named joint articulation remains the open part of R0.2.
+
 ### S1a · Oriented spacecraft body + body axes — **S**
 Instanced body glyph per object oriented by the attitude quaternion; body axes triad.
 **Panel (astro) — pin the contract in writing:** quaternion is **scalar-last `[x,y,z,w]`**

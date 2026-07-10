@@ -437,7 +437,7 @@ async function start(): Promise<void> {
       envelope.textContent = clear ? "Outside keep-out" : "Keep-out violation";
       envelope.classList.toggle("rejected", !clear);
     } else {
-      const position = selected === "chaser" ? absolute.chaser : absolute.target;
+      const position = (selected === "chaser" ? absolute.chaser : absolute.target).position;
       const radius = Math.hypot(position.xKm, position.yKm, position.zKm);
       element<HTMLElement>("#state-heading").textContent = "Absolute ECI";
       element<HTMLElement>("#state-unit").textContent = "km radius";

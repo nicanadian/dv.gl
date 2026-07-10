@@ -35,6 +35,25 @@
   },
   "samples": [
     {
+      "attitude_body_to_eci": {
+        "chaser": [
+          -0.5,
+          -0.5,
+          0.5,
+          0.5
+        ],
+        "chaser_mode": "nadir",
+        "convention": "body_to_inertial",
+        "frame": "ECI_J2000",
+        "quaternion_order": "xyzw",
+        "target": [
+          -0.5,
+          -0.5,
+          0.5,
+          0.5
+        ],
+        "target_mode": "nadir"
+      },
       "phase": "propagated",
       "relative_state": {
         "vx_mps": -0.35,
@@ -49,6 +68,25 @@
       "t_rel_s": 0.0
     },
     {
+      "attitude_body_to_eci": {
+        "chaser": [
+          -0.4831262450971432,
+          -0.5163226039002508,
+          0.5163226039002508,
+          0.4831262450971432
+        ],
+        "chaser_mode": "nadir",
+        "convention": "body_to_inertial",
+        "frame": "ECI_J2000",
+        "quaternion_order": "xyzw",
+        "target": [
+          -0.4831256733929148,
+          -0.5163231388468298,
+          0.5163231388468298,
+          0.4831256733929148
+        ],
+        "target_mode": "nadir"
+      },
       "phase": "propagated",
       "relative_state": {
         "vx_mps": -0.3139120920607806,
@@ -63,6 +101,25 @@
       "t_rel_s": 60.0
     },
     {
+      "attitude_body_to_eci": {
+        "chaser": [
+          -0.46571961987111377,
+          -0.5320763438333876,
+          0.5320763438333876,
+          0.46571961987111377
+        ],
+        "chaser_mode": "nadir",
+        "convention": "body_to_inertial",
+        "frame": "ECI_J2000",
+        "quaternion_order": "xyzw",
+        "target": [
+          -0.4657185434707707,
+          -0.5320772859909206,
+          0.5320772859909206,
+          0.4657185434707707
+        ],
+        "target_mode": "nadir"
+      },
       "phase": "propagated",
       "relative_state": {
         "vx_mps": -0.27928943858451294,
@@ -77,6 +134,25 @@
       "t_rel_s": 120.0
     },
     {
+      "attitude_body_to_eci": {
+        "chaser": [
+          -0.4477990679541406,
+          -0.5472439992721738,
+          0.5472439992721738,
+          0.4477990679541406
+        ],
+        "chaser_mode": "nadir",
+        "convention": "body_to_inertial",
+        "frame": "ECI_J2000",
+        "quaternion_order": "xyzw",
+        "target": [
+          -0.4477975579670601,
+          -0.5472452348616089,
+          0.5472452348616089,
+          0.4477975579670601
+        ],
+        "target_mode": "nadir"
+      },
       "phase": "propagated",
       "relative_state": {
         "vx_mps": -0.24603978083486852,
@@ -91,6 +167,25 @@
       "t_rel_s": 180.0
     },
     {
+      "attitude_body_to_eci": {
+        "chaser": [
+          -0.429384080450428,
+          -0.5618089634882487,
+          0.5618089634882487,
+          0.429384080450428
+        ],
+        "chaser_mode": "nadir",
+        "convention": "body_to_inertial",
+        "frame": "ECI_J2000",
+        "quaternion_order": "xyzw",
+        "target": [
+          -0.4293822103321782,
+          -0.561810392793025,
+          0.561810392793025,
+          0.4293822103321782
+        ],
+        "target_mode": "nadir"
+      },
       "phase": "propagated",
       "relative_state": {
         "vx_mps": -0.2140649273060644,
@@ -105,6 +200,25 @@
       "t_rel_s": 240.0
     },
     {
+      "attitude_body_to_eci": {
+        "chaser": [
+          -0.4104946779776888,
+          -0.5757552599429672,
+          0.5757552599429672,
+          0.4104946779776888
+        ],
+        "chaser_mode": "nadir",
+        "convention": "body_to_inertial",
+        "frame": "ECI_J2000",
+        "quaternion_order": "xyzw",
+        "target": [
+          -0.41049252179190676,
+          -0.5757567972268508,
+          0.5757567972268508,
+          0.41049252179190676
+        ],
+        "target_mode": "nadir"
+      },
       "phase": "propagated",
       "relative_state": {
         "vx_mps": -0.18326116907625975,
@@ -119,6 +233,25 @@
       "t_rel_s": 300.0
     },
     {
+      "attitude_body_to_eci": {
+        "chaser": [
+          -0.3911513923039788,
+          -0.5890675583484962,
+          0.5890675583484962,
+          0.3911513923039788
+        ],
+        "chaser_mode": "nadir",
+        "convention": "body_to_inertial",
+        "frame": "ECI_J2000",
+        "quaternion_order": "xyzw",
+        "target": [
+          -0.39114902302012916,
+          -0.5890691315884737,
+          0.5890691315884737,
+          0.39114902302012916
+        ],
+        "target_mode": "nadir"
+      },
       "phase": "propagated",
       "relative_state": {
         "vx_mps": -0.15351971775873108,
@@ -133,6 +266,25 @@
       "t_rel_s": 360.0
     },
     {
+      "attitude_body_to_eci": {
+        "chaser": [
+          -0.3713752475633195,
+          -0.6017311903975754,
+          0.6017311903975754,
+          0.3713752475633195
+        ],
+        "chaser_mode": "nadir",
+        "convention": "body_to_inertial",
+        "frame": "ECI_J2000",
+        "quaternion_order": "xyzw",
+        "target": [
+          -0.3713727354088544,
+          -0.6017327408367813,
+          0.6017327408367813,
+          0.3713727354088544
+        ],
+        "target_mode": "nadir"
+      },
       "phase": "propagated",
       "relative_state": {
         "vx_mps": -0.12472716454542304,
@@ -147,6 +299,25 @@
       "t_rel_s": 420.0
     },
     {
+      "attitude_body_to_eci": {
+        "chaser": [
+          -0.3511877410326272,
+          -0.6137321651570825,
+          0.6137321651570825,
+          0.3511877410326272
+        ],
+        "chaser_mode": "nadir",
+        "convention": "body_to_inertial",
+        "frame": "ECI_J2000",
+        "quaternion_order": "xyzw",
+        "target": [
+          -0.3511851519174902,
+          -0.6137336466845282,
+          0.6137336466845282,
+          0.3511851519174902
+        ],
+        "target_mode": "nadir"
+      },
       "phase": "propagated",
       "relative_state": {
         "vx_mps": -0.0967659587655698,
@@ -161,6 +332,25 @@
       "t_rel_s": 480.0
     },
     {
+      "attitude_body_to_eci": {
+        "chaser": [
+          -0.3306108234518681,
+          -0.6250571841171636,
+          0.6250571841171636,
+          0.3306108234518681
+        ],
+        "chaser_mode": "nadir",
+        "convention": "body_to_inertial",
+        "frame": "ECI_J2000",
+        "quaternion_order": "xyzw",
+        "target": [
+          -0.33060821748253627,
+          -0.6250585624827645,
+          0.6250585624827645,
+          0.33060821748253627
+        ],
+        "target_mode": "nadir"
+      },
       "phase": "propagated",
       "relative_state": {
         "vx_mps": -0.06951490430632538,
@@ -175,6 +365,25 @@
       "t_rel_s": 540.0
     },
     {
+      "attitude_body_to_eci": {
+        "chaser": [
+          -0.3096668788691401,
+          -0.6356936558842201,
+          0.6356936558842201,
+          0.3096668788691401
+        ],
+        "chaser_mode": "nadir",
+        "convention": "body_to_inertial",
+        "frame": "ECI_J2000",
+        "quaternion_order": "xyzw",
+        "target": [
+          -0.309664308968486,
+          -0.6356949077592726,
+          0.6356949077592726,
+          0.309664308968486
+        ],
+        "target_mode": "nadir"
+      },
       "phase": "propagated",
       "relative_state": {
         "vx_mps": -0.04284967217098709,

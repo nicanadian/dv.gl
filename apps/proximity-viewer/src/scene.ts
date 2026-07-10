@@ -6,8 +6,8 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
-import type { AbsolutePair, EciPosition } from "./absolute.js";
-import type { InterpolatedReplayState, ParsedReplay } from "./replay.js";
+import type { AbsolutePair, AbsoluteSample } from "./absolute.js";
+import type { InterpolatedReplayState, ParsedReplay, QuaternionXyzw } from "./replay.js";
 
 export type VehicleRole = "target" | "chaser";
 export type FocusMode = "overview" | VehicleRole;
@@ -58,6 +58,41 @@ function makeStars(): THREE.Points {
     geometry,
     new THREE.PointsMaterial({ color: 0xaeb8ca, size: 0.42, sizeAttenuation: true }),
   );
+}
+
+export function bodyToLvlhQuaternion(
+  bodyToEci: QuaternionXyzw,
+  target: AbsoluteSample,
+): THREE.Quaternion {
+  const radial = new THREE.Vector3(
+    target.position.xKm,
+    target.position.yKm,
+    target.position.zKm,
+  ).normalize();
+  const velocity = new THREE.Vector3(target.velocity.xKm, target.velocity.yKm, target.velocity.zKm);
+  const crossTrack = new THREE.Vector3().crossVectors(radial, velocity).normalize().negate();
+  const inTrack = new THREE.Vector3().crossVectors(crossTrack, radial).normalize();
+  const lvlhToEci = new THREE.Matrix4().set(
+    radial.x,
+    inTrack.x,
+    crossTrack.x,
+    0,
+    radial.y,
+    inTrack.y,
+    crossTrack.y,
+    0,
+    radial.z,
+    inTrack.z,
+    crossTrack.z,
+    0,
+    0,
+    0,
+    0,
+    1,
+  );
+  const eciToLvlh = new THREE.Quaternion().setFromRotationMatrix(lvlhToEci).invert();
+  const bodyQuaternion = new THREE.Quaternion(bodyToEci.x, bodyToEci.y, bodyToEci.z, bodyToEci.w);
+  return eciToLvlh.multiply(bodyQuaternion).normalize();
 }
 
 export class ProximityScene {
@@ -259,14 +294,16 @@ export class ProximityScene {
 
   render(
     state: InterpolatedReplayState,
-    absolute: { readonly chaser: EciPosition; readonly target: EciPosition },
+    absolute: { readonly chaser: AbsoluteSample; readonly target: AbsoluteSample },
   ): void {
     const { x, y, z } = state.position;
     this.chaserRoot.position.set(x, y, z);
-    const aim = new THREE.Vector3(-x, -y, -z);
-    if (aim.lengthSq() > 1e-8) {
-      this.chaserRoot.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, -1), aim.normalize());
-    }
+    this.chaserRoot.quaternion.copy(
+      bodyToLvlhQuaternion(state.chaserAttitudeBodyToEci, absolute.target),
+    );
+    this.targetRoot.quaternion.copy(
+      bodyToLvlhQuaternion(state.targetAttitudeBodyToEci, absolute.target),
+    );
     if (this.focusMode === "chaser") {
       this.controls.target.lerp(this.chaserRoot.position, 0.14);
       const offset = new THREE.Vector3(15, -18, 11);
@@ -274,14 +311,14 @@ export class ProximityScene {
     }
     const scale = Number(this.absoluteRoot.userData.scale ?? 1);
     this.absoluteChaser.position.set(
-      absolute.chaser.xKm * scale,
-      absolute.chaser.yKm * scale,
-      absolute.chaser.zKm * scale,
+      absolute.chaser.position.xKm * scale,
+      absolute.chaser.position.yKm * scale,
+      absolute.chaser.position.zKm * scale,
     );
     this.absoluteTarget.position.set(
-      absolute.target.xKm * scale,
-      absolute.target.yKm * scale,
-      absolute.target.zKm * scale,
+      absolute.target.position.xKm * scale,
+      absolute.target.position.yKm * scale,
+      absolute.target.position.zKm * scale,
     );
     this.controls.update();
     this.renderer.render(this.scene, this.camera);

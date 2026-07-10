@@ -22,11 +22,25 @@ const fixture = {
       phase: "hold",
       t: "2026-07-10T00:00:00.000Z",
       relative_state: { x_m: 0, y_m: -10, z_m: 0 },
+      attitude_body_to_eci: {
+        frame: "ECI_J2000",
+        convention: "body_to_inertial",
+        quaternion_order: "xyzw",
+        chaser: [0, 0, 0, 1],
+        target: [0, 0, 0, 1],
+      },
     },
     {
       phase: "terminal",
       t: "2026-07-10T00:00:10.000Z",
       relative_state: { x_m: 0, y_m: -2, z_m: 0 },
+      attitude_body_to_eci: {
+        frame: "ECI_J2000",
+        convention: "body_to_inertial",
+        quaternion_order: "xyzw",
+        chaser: [0, 0, Math.SQRT1_2, Math.SQRT1_2],
+        target: [0, 0, 0, 1],
+      },
     },
   ],
 };
@@ -38,6 +52,13 @@ describe("parseReplay", () => {
     expect(replay.samples).toHaveLength(2);
     expect(replay.frameProfile).toBe("skframe/v1");
     expect(replay.notOfficialModel).toBe(true);
+    expect(replay.samples[0]?.chaserAttitudeBodyToEci.w).toBe(1);
+  });
+
+  it("fails closed on malformed or missing attitude", () => {
+    const missing = structuredClone(fixture);
+    delete (missing.samples[0] as Partial<(typeof fixture.samples)[number]>).attitude_body_to_eci;
+    expect(() => parseReplay(missing)).toThrow("attitude contract mismatch");
   });
 
   it("fails closed on a wrong frame or non-increasing samples", () => {
@@ -60,6 +81,7 @@ describe("replayStateAt", () => {
     expect(state.position).toEqual({ x: 0, y: -6, z: 0 });
     expect(state.separationM).toBe(6);
     expect(state.phase).toBe("hold");
+    expect(Math.hypot(...Object.values(state.chaserAttitudeBodyToEci))).toBeCloseTo(1);
   });
 
   it("clamps outside the evidence window", () => {

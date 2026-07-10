@@ -12,6 +12,7 @@ export interface EciPosition {
 export interface AbsoluteSample {
   readonly timeSec: number;
   readonly position: EciPosition;
+  readonly velocity: EciPosition;
 }
 
 export interface AbsolutePair {
@@ -57,17 +58,22 @@ function parseDocument(value: unknown, role: string) {
     }
     const timestamp = Date.parse(point.time);
     const vector = point.position_eci_km;
+    const velocity = point.velocity_eci_km_s;
     if (
       !Number.isFinite(timestamp) ||
       !Array.isArray(vector) ||
       vector.length !== 3 ||
-      !vector.every((entry) => typeof entry === "number" && Number.isFinite(entry))
+      !vector.every((entry) => typeof entry === "number" && Number.isFinite(entry)) ||
+      !Array.isArray(velocity) ||
+      velocity.length !== 3 ||
+      !velocity.every((entry) => typeof entry === "number" && Number.isFinite(entry))
     ) {
       throw new Error(`${role} ephemeris point ${index} is invalid`);
     }
     return {
       timeSec: (timestamp - epochMs) / 1000,
       position: { xKm: vector[0], yKm: vector[1], zKm: vector[2] },
+      velocity: { xKm: velocity[0], yKm: velocity[1], zKm: velocity[2] },
     };
   });
   return { epochMs, runId: provenance.run_id, samples };
@@ -111,7 +117,7 @@ export function parseAbsolutePair(
   };
 }
 
-function interpolate(samples: readonly AbsoluteSample[], timeSec: number): EciPosition {
+function interpolate(samples: readonly AbsoluteSample[], timeSec: number): AbsoluteSample {
   const clamped = Math.max(0, Math.min(samples.at(-1)?.timeSec ?? 0, timeSec));
   let rightIndex = samples.findIndex((sample) => sample.timeSec >= clamped);
   if (rightIndex < 0) rightIndex = samples.length - 1;
@@ -120,10 +126,15 @@ function interpolate(samples: readonly AbsoluteSample[], timeSec: number): EciPo
   const left = samples[Math.max(0, rightIndex - 1)] ?? right;
   const span = right.timeSec - left.timeSec;
   const amount = span > 0 ? (clamped - left.timeSec) / span : 0;
+  const vector = (first: EciPosition, second: EciPosition): EciPosition => ({
+    xKm: first.xKm + (second.xKm - first.xKm) * amount,
+    yKm: first.yKm + (second.yKm - first.yKm) * amount,
+    zKm: first.zKm + (second.zKm - first.zKm) * amount,
+  });
   return {
-    xKm: left.position.xKm + (right.position.xKm - left.position.xKm) * amount,
-    yKm: left.position.yKm + (right.position.yKm - left.position.yKm) * amount,
-    zKm: left.position.zKm + (right.position.zKm - left.position.zKm) * amount,
+    timeSec: clamped,
+    position: vector(left.position, right.position),
+    velocity: vector(left.velocity, right.velocity),
   };
 }
 

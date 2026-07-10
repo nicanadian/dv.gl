@@ -13,11 +13,20 @@ export interface RelativePosition {
   readonly z: number;
 }
 
+export interface QuaternionXyzw {
+  readonly x: number;
+  readonly y: number;
+  readonly z: number;
+  readonly w: number;
+}
+
 export interface ReplaySample {
   readonly phase: string;
   readonly isoTime: string;
   readonly timeSec: number;
   readonly position: RelativePosition;
+  readonly chaserAttitudeBodyToEci: QuaternionXyzw;
+  readonly targetAttitudeBodyToEci: QuaternionXyzw;
 }
 
 export interface ParsedReplay {
@@ -37,6 +46,8 @@ export interface InterpolatedReplayState {
   readonly phase: string;
   readonly timeSec: number;
   readonly position: RelativePosition;
+  readonly chaserAttitudeBodyToEci: QuaternionXyzw;
+  readonly targetAttitudeBodyToEci: QuaternionXyzw;
   readonly separationM: number;
   readonly progress: number;
 }
@@ -69,6 +80,19 @@ function parseTimestamp(value: string, field: string): number {
   return timestamp;
 }
 
+function parseQuaternion(value: unknown, field: string): QuaternionXyzw {
+  if (!Array.isArray(value) || value.length !== 4) {
+    throw new Error(`${field} must be scalar-last [x,y,z,w]`);
+  }
+  const components = value.map(Number);
+  const norm = Math.hypot(...components);
+  if (!components.every(Number.isFinite) || Math.abs(norm - 1) > 1e-6) {
+    throw new Error(`${field} must be a unit quaternion`);
+  }
+  const [x, y, z, w] = components as [number, number, number, number];
+  return { x, y, z, w };
+}
+
 export function parseReplay(value: unknown): ParsedReplay {
   if (!isRecord(value)) throw new Error("replay document must be an object");
   if (value.schema_version !== REPLAY_SCHEMA_VERSION) {
@@ -96,6 +120,14 @@ export function parseReplay(value: unknown): ParsedReplay {
     if (!isRecord(entry.relative_state)) {
       throw new Error(`sample ${index} requires relative_state`);
     }
+    const attitude = isRecord(entry.attitude_body_to_eci) ? entry.attitude_body_to_eci : {};
+    if (
+      attitude.frame !== "ECI_J2000" ||
+      attitude.convention !== "body_to_inertial" ||
+      attitude.quaternion_order !== "xyzw"
+    ) {
+      throw new Error(`sample ${index} attitude contract mismatch`);
+    }
     return {
       phase: requiredString(entry, "phase"),
       isoTime,
@@ -105,6 +137,8 @@ export function parseReplay(value: unknown): ParsedReplay {
         y: finiteNumber(entry.relative_state, "y_m"),
         z: finiteNumber(entry.relative_state, "z_m"),
       },
+      chaserAttitudeBodyToEci: parseQuaternion(attitude.chaser, `sample ${index} chaser attitude`),
+      targetAttitudeBodyToEci: parseQuaternion(attitude.target, `sample ${index} target attitude`),
     };
   });
 
@@ -140,6 +174,21 @@ function lerp(first: number, second: number, amount: number): number {
   return first + (second - first) * amount;
 }
 
+function nlerpQuaternion(
+  first: QuaternionXyzw,
+  second: QuaternionXyzw,
+  amount: number,
+): QuaternionXyzw {
+  const dot = first.x * second.x + first.y * second.y + first.z * second.z + first.w * second.w;
+  const sign = dot < 0 ? -1 : 1;
+  const x = lerp(first.x, second.x * sign, amount);
+  const y = lerp(first.y, second.y * sign, amount);
+  const z = lerp(first.z, second.z * sign, amount);
+  const w = lerp(first.w, second.w * sign, amount);
+  const norm = Math.hypot(x, y, z, w);
+  return { x: x / norm, y: y / norm, z: z / norm, w: w / norm };
+}
+
 export function replayStateAt(
   replay: ParsedReplay,
   requestedTimeSec: number,
@@ -161,6 +210,16 @@ export function replayStateAt(
     phase: amount >= 1 ? right.phase : left.phase,
     timeSec,
     position,
+    chaserAttitudeBodyToEci: nlerpQuaternion(
+      left.chaserAttitudeBodyToEci,
+      right.chaserAttitudeBodyToEci,
+      amount,
+    ),
+    targetAttitudeBodyToEci: nlerpQuaternion(
+      left.targetAttitudeBodyToEci,
+      right.targetAttitudeBodyToEci,
+      amount,
+    ),
     separationM: Math.hypot(position.x, position.y, position.z),
     progress: replay.durationSec > 0 ? timeSec / replay.durationSec : 0,
   };

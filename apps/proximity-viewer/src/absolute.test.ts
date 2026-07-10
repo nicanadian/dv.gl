@@ -3,9 +3,21 @@
 import { describe, expect, it } from "vitest";
 import { absoluteStateAt, parseAbsolutePair } from "./absolute.js";
 
-const points: Array<{ time: string; position_eci_km: [number, number, number] }> = [
-  { time: "2026-07-10T00:00:00.000Z", position_eci_km: [6878, 0, 0] },
-  { time: "2026-07-10T00:01:00.000Z", position_eci_km: [6860, 450, 0] },
+const points: Array<{
+  time: string;
+  position_eci_km: [number, number, number];
+  velocity_eci_km_s: [number, number, number];
+}> = [
+  {
+    time: "2026-07-10T00:00:00.000Z",
+    position_eci_km: [6878, 0, 0],
+    velocity_eci_km_s: [0, 7.6, 0],
+  },
+  {
+    time: "2026-07-10T00:01:00.000Z",
+    position_eci_km: [6860, 450, 0],
+    velocity_eci_km_s: [-0.5, 7.58, 0],
+  },
 ];
 const document = (objectId: string, offset = 0) => ({
   schema_version: "ephemeris/1.0",
@@ -31,7 +43,7 @@ describe("absolute handoff evidence", () => {
   it("binds aligned pdb tracks to the gate and interpolates", () => {
     const pair = parseAbsolutePair(document("chaser", 0.25), document("target"), gate);
     expect(pair.gateId).toBe("gate-1");
-    expect(absoluteStateAt(pair, 30).target.yKm).toBe(225);
+    expect(absoluteStateAt(pair, 30).target.position.yKm).toBe(225);
   });
 
   it("fails closed on source drift", () => {
