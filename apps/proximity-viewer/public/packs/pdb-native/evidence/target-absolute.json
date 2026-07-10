@@ -1,0 +1,174 @@
+{
+  "center_body": "EARTH",
+  "frame": "ECI_J2000",
+  "frame_profile": "skframe/v1",
+  "length_units": "km",
+  "object": {
+    "object_id": "TARGET-PDB-1",
+    "object_name": "pdb_client_proxy"
+  },
+  "points": [
+    {
+      "phase": "propagated",
+      "position_eci_km": [
+        6878.137,
+        0.0,
+        0.0
+      ],
+      "time": "2026-07-10T00:00:00.000Z",
+      "velocity_eci_km_s": [
+        0.0,
+        7.612608173223869,
+        0.0
+      ]
+    },
+    {
+      "phase": "propagated",
+      "position_eci_km": [
+        6862.955467168426,
+        456.42031267638947,
+        0.0
+      ],
+      "time": "2026-07-10T00:01:00.000Z",
+      "velocity_eci_km_s": [
+        -0.5058655748202764,
+        7.595805452284278,
+        0.0
+      ]
+    },
+    {
+      "phase": "propagated",
+      "position_eci_km": [
+        6817.477615317916,
+        910.8257642707583,
+        0.0
+      ],
+      "time": "2026-07-10T00:02:00.000Z",
+      "velocity_eci_km_s": [
+        -1.0095073326593298,
+        7.545470543845235,
+        0.0
+      ]
+    },
+    {
+      "phase": "propagated",
+      "position_eci_km": [
+        6741.903373497841,
+        1361.2102776287725,
+        0.0
+      ],
+      "time": "2026-07-10T00:03:00.000Z",
+      "velocity_eci_km_s": [
+        -1.5087109866029504,
+        7.461822881013576,
+        0.0
+      ]
+    },
+    {
+      "phase": "propagated",
+      "position_eci_km": [
+        6636.56500454544,
+        1805.5853060219786,
+        0.0
+      ],
+      "time": "2026-07-10T00:04:00.000Z",
+      "velocity_eci_km_s": [
+        -2.0012812739324213,
+        7.345227176623771,
+        0.0
+      ]
+    },
+    {
+      "phase": "propagated",
+      "position_eci_km": [
+        6501.925680554509,
+        2241.988507625046,
+        0.0
+      ],
+      "time": "2026-07-10T00:05:00.000Z",
+      "velocity_eci_km_s": [
+        -2.4850513769071063,
+        7.196191913058302,
+        0.0
+      ]
+    },
+    {
+      "phase": "propagated",
+      "position_eci_km": [
+        6338.577496197662,
+        2668.4923114348876,
+        0.0
+      ],
+      "time": "2026-07-10T00:06:00.000Z",
+      "velocity_eci_km_s": [
+        -2.957892234153869,
+        7.015367234795262,
+        0.0
+      ]
+    },
+    {
+      "phase": "propagated",
+      "position_eci_km": [
+        6147.238927551575,
+        3083.2123389898975,
+        0.0
+      ],
+      "time": "2026-07-10T00:07:00.000Z",
+      "velocity_eci_km_s": [
+        -3.417721706509471,
+        6.803542250496889,
+        0.0
+      ]
+    },
+    {
+      "phase": "propagated",
+      "position_eci_km": [
+        5928.751746235975,
+        3484.315646715347,
+        0.0
+      ],
+      "time": "2026-07-10T00:08:00.000Z",
+      "velocity_eci_km_s": [
+        -3.8625135614356103,
+        6.561641753420608,
+        0.0
+      ]
+    },
+    {
+      "phase": "propagated",
+      "position_eci_km": [
+        5684.077400819871,
+        3870.0287543072473,
+        0.0
+      ],
+      "time": "2026-07-10T00:09:00.000Z",
+      "velocity_eci_km_s": [
+        -4.2903062404772765,
+        6.290722370916249,
+        0.0
+      ]
+    },
+    {
+      "phase": "propagated",
+      "position_eci_km": [
+        5414.292879567665,
+        4238.645425272666,
+        0.0
+      ],
+      "time": "2026-07-10T00:10:00.000Z",
+      "velocity_eci_km_s": [
+        -4.69921137466947,
+        5.991968155770714,
+        0.0
+      ]
+    }
+  ],
+  "provenance": {
+    "producer": "pdb",
+    "run_id": "pdb_proximity_reference_001",
+    "source_run": "pdb_proximity_reference_001"
+  },
+  "schema_version": "ephemeris/1.0",
+  "time_scale": "UTC",
+  "velocity_units": "km/s"
+}

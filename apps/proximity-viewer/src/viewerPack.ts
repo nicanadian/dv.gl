@@ -31,6 +31,11 @@ export interface ViewerPack {
     readonly chaser: PackModel;
   };
   readonly scenes: { readonly replay: string; readonly scenario: string };
+  readonly evidence: {
+    readonly proximity_gate: string;
+    readonly absolute_chaser_ephemeris: string;
+    readonly absolute_target_ephemeris: string;
+  };
   readonly files: readonly PackFile[];
 }
 
@@ -76,13 +81,18 @@ export function parseViewerPack(value: unknown): ViewerPack {
   if (value.authority !== "visual_only") {
     throw new Error("viewer pack must be visual_only");
   }
-  if (!isRecord(value.models) || !isRecord(value.scenes)) {
-    throw new Error("viewer pack models and scenes are required");
+  if (!isRecord(value.models) || !isRecord(value.scenes) || !isRecord(value.evidence)) {
+    throw new Error("viewer pack models, scenes, and evidence are required");
   }
   validateModel(value.models.client, "client");
   validateModel(value.models.chaser, "chaser");
   if (!isSafeRelativePath(value.scenes.replay) || !isSafeRelativePath(value.scenes.scenario)) {
     throw new Error("viewer pack replay or scenario path is unsafe");
+  }
+  for (const key of ["proximity_gate", "absolute_chaser_ephemeris", "absolute_target_ephemeris"]) {
+    if (!isSafeRelativePath(value.evidence[key])) {
+      throw new Error(`viewer pack evidence.${key} path is unsafe`);
+    }
   }
   if (!Array.isArray(value.files)) throw new Error("viewer pack files are required");
   const files = value.files as unknown[];
@@ -98,12 +108,16 @@ export function parseViewerPack(value: unknown): ViewerPack {
     }
     records.set(entry.path, entry.sha256);
   }
-  for (const path of [
+  const requiredPaths = [
     value.scenes.replay,
     value.scenes.scenario,
+    value.evidence.proximity_gate,
+    value.evidence.absolute_chaser_ephemeris,
+    value.evidence.absolute_target_ephemeris,
     value.models.client.tiers.high,
     value.models.chaser.tiers.high,
-  ]) {
+  ] as string[];
+  for (const path of requiredPaths) {
     if (!records.has(path)) throw new Error(`viewer pack does not manifest ${path}`);
   }
   if (typeof value.pack_id !== "string" || typeof value.version !== "string") {

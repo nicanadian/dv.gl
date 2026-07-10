@@ -15,10 +15,12 @@ import {
   RotateCcw,
 } from "lucide";
 import "./style.css";
+import { absoluteStateAt, parseAbsolutePair } from "./absolute.js";
 import { parseReplay, replayStateAt } from "./replay.js";
 import {
   type FocusMode,
   type OverlayVisibility,
+  type PresentationMode,
   ProximityScene,
   type VehicleRole,
 } from "./scene.js";
@@ -120,6 +122,10 @@ function appMarkup(): string {
         <aside class="side-panel left-panel" aria-label="Scene controls">
           <section class="panel-section">
             <div class="section-heading">Scene</div>
+            <div class="mode-control" role="group" aria-label="Presentation frame">
+              <button type="button" data-presentation="absolute">Absolute ECI</button>
+              <button type="button" data-presentation="relative" class="active">Relative LVLH</button>
+            </div>
             <label class="field-label" for="target-model">Target model</label>
             <select id="target-model"></select>
             <label class="field-label" for="view-mode">Camera</label>
@@ -130,7 +136,7 @@ function appMarkup(): string {
             </select>
           </section>
 
-          <section class="panel-section">
+          <section class="panel-section" id="relative-overlays">
             <div class="section-heading">Overlays</div>
             <label class="toggle-row"><input id="overlay-trail" type="checkbox" checked />Trajectory</label>
             <label class="toggle-row"><input id="overlay-corridor" type="checkbox" checked />Approach corridor</label>
@@ -138,7 +144,7 @@ function appMarkup(): string {
             <label class="toggle-row"><input id="overlay-axes" type="checkbox" checked />LVLH axes</label>
           </section>
 
-          <section class="panel-section frame-section">
+          <section class="panel-section frame-section" id="relative-frame-info">
             <div class="section-heading">LVLH / RIC</div>
             <div class="axis-row"><span class="axis-swatch radial"></span><span>R</span><small>Radial</small></div>
             <div class="axis-row"><span class="axis-swatch intrack"></span><span>I</span><small>In-track</small></div>
@@ -174,12 +180,12 @@ function appMarkup(): string {
 
         <aside class="side-panel right-panel" aria-label="Evidence inspector">
           <section class="panel-section metric-section">
-            <div class="section-heading">Relative state</div>
-            <div class="metric-primary"><span id="separation">--</span><small>m separation</small></div>
+            <div class="section-heading" id="state-heading">Relative state</div>
+            <div class="metric-primary"><span id="separation">--</span><small id="state-unit">m separation</small></div>
             <dl class="metric-grid">
-              <dt>Radial</dt><dd id="radial-position">--</dd>
-              <dt>In-track</dt><dd id="intrack-position">--</dd>
-              <dt>Cross-track</dt><dd id="cross-position">--</dd>
+              <dt id="axis-x-label">Radial</dt><dd id="radial-position">--</dd>
+              <dt id="axis-y-label">In-track</dt><dd id="intrack-position">--</dd>
+              <dt id="axis-z-label">Cross-track</dt><dd id="cross-position">--</dd>
             </dl>
             <div id="envelope-state" class="envelope-state">--</div>
           </section>
@@ -216,12 +222,19 @@ async function start(): Promise<void> {
   renderIcons();
 
   const pack = parseViewerPack(await fetchJson(`${PACK_ROOT}/pack.json`));
-  const [replayValue, scenarioValue] = await Promise.all([
+  const [replayValue, scenarioValue, chaserValue, targetValue, gateValue] = await Promise.all([
     fetchJson(packAssetUrl(PACK_ROOT, pack.scenes.replay)),
     fetchJson(packAssetUrl(PACK_ROOT, pack.scenes.scenario)),
+    fetchJson(packAssetUrl(PACK_ROOT, pack.evidence.absolute_chaser_ephemeris)),
+    fetchJson(packAssetUrl(PACK_ROOT, pack.evidence.absolute_target_ephemeris)),
+    fetchJson(packAssetUrl(PACK_ROOT, pack.evidence.proximity_gate)),
   ]);
   const replay = parseReplay(replayValue);
   const scenario = parsePackScenario(scenarioValue);
+  const absolutePair = parseAbsolutePair(chaserValue, targetValue, gateValue);
+  if (absolutePair.epochMs !== replay.epochMs || absolutePair.durationSec !== replay.durationSec) {
+    throw new Error("absolute and relative evidence do not share one mission clock");
+  }
   const clock = new MissionClock({
     epochMs: replay.epochMs,
     windowSeconds: replay.durationSec,
@@ -237,11 +250,13 @@ async function start(): Promise<void> {
   );
   const scene = new ProximityScene(element<HTMLElement>("#viewport"), scenario.keepOutMarginM);
   scene.setReplay(replay);
+  scene.setAbsolute(absolutePair);
 
   const chaser = viewerAsset(pack, "chaser", pack.models.chaser);
   const targets = [viewerAsset(pack, "target", pack.models.client)];
   let target = targets[0] as ViewerAsset;
   let selected: VehicleRole = "chaser";
+  let presentationMode: PresentationMode = "relative";
 
   const targetSelect = element<HTMLSelectElement>("#target-model");
   for (const asset of targets) {
@@ -294,6 +309,21 @@ async function start(): Promise<void> {
     );
   }
   scene.setOverlays(overlayState());
+
+  document.querySelectorAll<HTMLButtonElement>("[data-presentation]").forEach((button) => {
+    button.addEventListener("click", () => {
+      presentationMode = button.dataset.presentation as PresentationMode;
+      scene.setPresentationMode(presentationMode);
+      const relative = presentationMode === "relative";
+      element<HTMLElement>("#relative-overlays").hidden = !relative;
+      element<HTMLElement>("#relative-frame-info").hidden = !relative;
+      targetSelect.disabled = !relative;
+      element<HTMLSelectElement>("#view-mode").disabled = !relative;
+      document.querySelectorAll("[data-presentation]").forEach((candidate) => {
+        candidate.classList.toggle("active", candidate === button);
+      });
+    });
+  });
 
   const updateProvenance = (): void => {
     const asset = selected === "chaser" ? chaser : target;
@@ -385,20 +415,42 @@ async function start(): Promise<void> {
       updatePlayButton();
     }
     const state = replayStateAt(replay, clock.currentSeconds);
-    scene.render(state);
+    const absolute = absoluteStateAt(absolutePair, clock.currentSeconds);
+    scene.render(state, absolute);
     slider.value = String(state.timeSec);
     element<HTMLElement>("#elapsed-time").textContent = formatElapsed(state.timeSec);
     element<HTMLElement>("#phase-pill").textContent = formatPhase(state.phase);
     element<HTMLElement>("#absolute-time").textContent =
       `${absoluteFormatter.format(clock.currentUnixMs())} UTC`;
-    element<HTMLElement>("#separation").textContent = state.separationM.toFixed(1);
-    element<HTMLElement>("#radial-position").textContent = `${state.position.x.toFixed(1)} m`;
-    element<HTMLElement>("#intrack-position").textContent = `${state.position.y.toFixed(1)} m`;
-    element<HTMLElement>("#cross-position").textContent = `${state.position.z.toFixed(1)} m`;
     const envelope = element<HTMLElement>("#envelope-state");
-    const clear = state.separationM >= scenario.keepOutMarginM;
-    envelope.textContent = clear ? "Outside keep-out" : "Keep-out violation";
-    envelope.classList.toggle("rejected", !clear);
+    if (presentationMode === "relative") {
+      element<HTMLElement>("#state-heading").textContent = "Relative state";
+      element<HTMLElement>("#state-unit").textContent = "m separation";
+      element<HTMLElement>("#axis-x-label").textContent = "Radial";
+      element<HTMLElement>("#axis-y-label").textContent = "In-track";
+      element<HTMLElement>("#axis-z-label").textContent = "Cross-track";
+      element<HTMLElement>("#separation").textContent = state.separationM.toFixed(1);
+      element<HTMLElement>("#radial-position").textContent = `${state.position.x.toFixed(1)} m`;
+      element<HTMLElement>("#intrack-position").textContent = `${state.position.y.toFixed(1)} m`;
+      element<HTMLElement>("#cross-position").textContent = `${state.position.z.toFixed(1)} m`;
+      const clear = state.separationM >= scenario.keepOutMarginM;
+      envelope.textContent = clear ? "Outside keep-out" : "Keep-out violation";
+      envelope.classList.toggle("rejected", !clear);
+    } else {
+      const position = selected === "chaser" ? absolute.chaser : absolute.target;
+      const radius = Math.hypot(position.xKm, position.yKm, position.zKm);
+      element<HTMLElement>("#state-heading").textContent = "Absolute ECI";
+      element<HTMLElement>("#state-unit").textContent = "km radius";
+      element<HTMLElement>("#axis-x-label").textContent = "ECI X";
+      element<HTMLElement>("#axis-y-label").textContent = "ECI Y";
+      element<HTMLElement>("#axis-z-label").textContent = "ECI Z";
+      element<HTMLElement>("#separation").textContent = radius.toFixed(1);
+      element<HTMLElement>("#radial-position").textContent = `${position.xKm.toFixed(1)} km`;
+      element<HTMLElement>("#intrack-position").textContent = `${position.yKm.toFixed(1)} km`;
+      element<HTMLElement>("#cross-position").textContent = `${position.zKm.toFixed(1)} km`;
+      envelope.textContent = "pdb absolute source";
+      envelope.classList.remove("rejected");
+    }
     phaseTimeline.querySelectorAll<HTMLButtonElement>("button").forEach((button) => {
       button.classList.toggle("passed", Number(button.dataset.time) <= state.timeSec);
     });

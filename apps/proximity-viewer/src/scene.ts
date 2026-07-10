@@ -6,10 +6,12 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import type { AbsolutePair, EciPosition } from "./absolute.js";
 import type { InterpolatedReplayState, ParsedReplay } from "./replay.js";
 
 export type VehicleRole = "target" | "chaser";
 export type FocusMode = "overview" | VehicleRole;
+export type PresentationMode = "absolute" | "relative";
 
 export interface OverlayVisibility {
   readonly axes: boolean;
@@ -69,11 +71,22 @@ export class ProximityScene {
   private readonly resizeObserver: ResizeObserver;
   private readonly targetRoot = new THREE.Group();
   private readonly chaserRoot = new THREE.Group();
+  private readonly relativeRoot = new THREE.Group();
+  private readonly absoluteRoot = new THREE.Group();
+  private readonly absoluteTarget = new THREE.Mesh(
+    new THREE.SphereGeometry(0.24, 16, 12),
+    new THREE.MeshBasicMaterial({ color: COLORS.inTrack }),
+  );
+  private readonly absoluteChaser = new THREE.Mesh(
+    new THREE.SphereGeometry(0.3, 16, 12),
+    new THREE.MeshBasicMaterial({ color: COLORS.radial }),
+  );
   private readonly axesRoot = new THREE.Group();
   private readonly corridorRoot = new THREE.Group();
   private readonly keepOutRoot = new THREE.Group();
   private readonly trailRoot = new THREE.Group();
   private focusMode: FocusMode = "overview";
+  private presentationMode: PresentationMode = "relative";
   private selectionHandler?: (role: VehicleRole) => void;
 
   constructor(
@@ -102,14 +115,19 @@ export class ProximityScene {
 
     this.scene.add(
       new THREE.HemisphereLight(0x9db8e8, 0x101219, 1.3),
+      this.relativeRoot,
+      this.absoluteRoot,
+      makeStars(),
+    );
+    this.relativeRoot.add(
       this.targetRoot,
       this.chaserRoot,
       this.axesRoot,
       this.corridorRoot,
       this.keepOutRoot,
       this.trailRoot,
-      makeStars(),
     );
+    this.absoluteRoot.visible = false;
     const sun = new THREE.DirectionalLight(0xfff0d9, 4.2);
     sun.position.set(40, -15, 55);
     const earthshine = new THREE.DirectionalLight(0x4f83b8, 1.8);
@@ -140,6 +158,66 @@ export class ProximityScene {
       opacity: 0.72,
     });
     this.trailRoot.add(new THREE.Line(geometry, material));
+  }
+
+  setAbsolute(pair: AbsolutePair): void {
+    this.absoluteRoot.clear();
+    const earthRadius = 28;
+    const scale = earthRadius / 6378.137;
+    const earth = new THREE.Mesh(
+      new THREE.SphereGeometry(earthRadius, 48, 32),
+      new THREE.MeshStandardMaterial({
+        color: 0x183b52,
+        roughness: 0.92,
+        metalness: 0,
+        emissive: 0x07131d,
+      }),
+    );
+    const atmosphere = new THREE.Mesh(
+      new THREE.SphereGeometry(earthRadius * 1.025, 48, 32),
+      new THREE.MeshBasicMaterial({
+        color: 0x54d7c5,
+        transparent: true,
+        opacity: 0.07,
+        side: THREE.BackSide,
+      }),
+    );
+    const track = (samples: AbsolutePair["target"], color: number) =>
+      new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints(
+          samples.map(
+            (sample) =>
+              new THREE.Vector3(
+                sample.position.xKm * scale,
+                sample.position.yKm * scale,
+                sample.position.zKm * scale,
+              ),
+          ),
+        ),
+        new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.8 }),
+      );
+    this.absoluteRoot.add(
+      earth,
+      atmosphere,
+      track(pair.target, COLORS.inTrack),
+      track(pair.chaser, COLORS.radial),
+      this.absoluteTarget,
+      this.absoluteChaser,
+    );
+    this.absoluteRoot.userData.scale = scale;
+  }
+
+  setPresentationMode(mode: PresentationMode): void {
+    this.presentationMode = mode;
+    this.relativeRoot.visible = mode === "relative";
+    this.absoluteRoot.visible = mode === "absolute";
+    if (mode === "absolute") {
+      this.camera.position.set(58, -66, 42);
+      this.controls.target.set(0, 0, 0);
+    } else {
+      this.setFocus(this.focusMode);
+    }
+    this.controls.update();
   }
 
   async loadVehicle(role: VehicleRole, uri: string): Promise<void> {
@@ -179,7 +257,10 @@ export class ProximityScene {
     this.trailRoot.visible = visibility.trail;
   }
 
-  render(state: InterpolatedReplayState): void {
+  render(
+    state: InterpolatedReplayState,
+    absolute: { readonly chaser: EciPosition; readonly target: EciPosition },
+  ): void {
     const { x, y, z } = state.position;
     this.chaserRoot.position.set(x, y, z);
     const aim = new THREE.Vector3(-x, -y, -z);
@@ -191,6 +272,17 @@ export class ProximityScene {
       const offset = new THREE.Vector3(15, -18, 11);
       this.camera.position.lerp(this.chaserRoot.position.clone().add(offset), 0.08);
     }
+    const scale = Number(this.absoluteRoot.userData.scale ?? 1);
+    this.absoluteChaser.position.set(
+      absolute.chaser.xKm * scale,
+      absolute.chaser.yKm * scale,
+      absolute.chaser.zKm * scale,
+    );
+    this.absoluteTarget.position.set(
+      absolute.target.xKm * scale,
+      absolute.target.yKm * scale,
+      absolute.target.zKm * scale,
+    );
     this.controls.update();
     this.renderer.render(this.scene, this.camera);
   }
@@ -205,6 +297,7 @@ export class ProximityScene {
   }
 
   private readonly handleClick = (event: MouseEvent): void => {
+    if (this.presentationMode !== "relative") return;
     const bounds = this.renderer.domElement.getBoundingClientRect();
     this.pointer.set(
       ((event.clientX - bounds.left) / bounds.width) * 2 - 1,

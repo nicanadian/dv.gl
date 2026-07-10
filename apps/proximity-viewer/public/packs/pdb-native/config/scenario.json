@@ -1,4 +1,6 @@
 {
+  "absolute_chaser_ephemeris": "evidence/chaser-absolute.json",
+  "absolute_target_ephemeris": "evidence/target-absolute.json",
   "animation": {
     "fps": 24,
     "frames_per_sample": 6
@@ -35,6 +37,7 @@
     "chaser_glb": "models/chaser.high.glb",
     "client_glb": "models/client.high.glb"
   },
+  "proximity_gate": "evidence/proximity-gate.json",
   "replay": "replay/approach.json",
   "schema_version": "rpo_scenario/v1"
 }

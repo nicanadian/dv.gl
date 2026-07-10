@@ -189,6 +189,34 @@ input:focus-visible {
   font-size: 11px;
 }
 
+.mode-control {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  overflow: hidden;
+  margin-bottom: 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: 4px;
+}
+
+.mode-control button {
+  min-width: 0;
+  height: 34px;
+  border: 0;
+  border-right: 1px solid var(--line-strong);
+  background: #0b0f15;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.mode-control button:last-child {
+  border-right: 0;
+}
+
+.mode-control button.active {
+  background: color-mix(in srgb, var(--teal), transparent 87%);
+  color: var(--teal);
+}
+
 select {
   width: 100%;
   height: 34px;

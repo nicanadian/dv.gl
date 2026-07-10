@@ -1,0 +1,74 @@
+{
+  "abort": {
+    "max_time_to_retreat_s": 900.0,
+    "retreat_target_lvlh_m": {
+      "x_m": 500.0,
+      "y_m": 0.0,
+      "z_m": 0.0
+    }
+  },
+  "absolute_source": {
+    "chaser_ephemeris_ref": "chaser/ephemeris.json",
+    "ephemeris_ref": "target/ephemeris.json",
+    "producer": "pdb",
+    "run_id": "pdb_proximity_reference_001",
+    "target_ephemeris_ref": "target/ephemeris.json"
+  },
+  "advisory_range_m": 250.0,
+  "approach_corridor": {
+    "axis_lvlh": "+x",
+    "half_angle_rad": 0.75,
+    "max_closing_speed_mps": 1.0
+  },
+  "center_body": "EARTH",
+  "chaser": {
+    "object_id": "CHASER-PDB-1",
+    "object_name": "pdb_servicer_proxy"
+  },
+  "contact_class": false,
+  "delta_v": {
+    "abort_reserve_mps": 2.0,
+    "residual_mps": 10.0
+  },
+  "epoch": "2026-07-10T00:00:00.000Z",
+  "exclusion_cones": [],
+  "frame_profile": "skframe/v1",
+  "gate_id": "gate_pdb_proximity_reference_001",
+  "hold_point_lvlh_m": {
+    "x_m": 100.0,
+    "y_m": 0.0,
+    "z_m": 0.0
+  },
+  "keep_out_zones_lvlh": [
+    {
+      "center_lvlh_m": {
+        "x_m": 0.0,
+        "y_m": 0.0,
+        "z_m": 0.0
+      },
+      "radius_m": 10.0,
+      "zone_id": "client_body"
+    }
+  ],
+  "length_units": "m",
+  "mission_id": "pdb_sk_proximity_reference_001",
+  "provenance": {
+    "not_flight_certified": true,
+    "pdb_run_id": "pdb_proximity_reference_001",
+    "producer": "pdb",
+    "synthetic_initial_conditions": true,
+    "truth_model": "independent_numerical_free_flyers_rk4_j2"
+  },
+  "relative_nav": {
+    "assumed_position_1sigma_m": 1.0,
+    "assumed_velocity_1sigma_mps": 0.02,
+    "notes": "reference simulation assumption; not flight navigation evidence"
+  },
+  "schema_version": "proximity_gate/0.1",
+  "target": {
+    "cooperative": true,
+    "object_id": "TARGET-PDB-1",
+    "object_name": "pdb_client_proxy"
+  },
+  "velocity_units": "m/s"
+}

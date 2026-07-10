@@ -105,6 +105,13 @@ does not interleave WebGL with the dv.gl WebGPU canvas or move viewer state back
 admission/control path. **Exit.** Desktop/mobile build, replay parser tests, generated-asset
 hash manifest, and browser render checks pass.
 
+**Native handoff closure (2026-07-10).** The app now consumes one complete
+`rpo_viewer_pack/v1` built from pdb run `pdb_proximity_reference_001` and the
+Sublime Kinematics replay. The pack includes hashed gate, chaser/target absolute
+ephemerides, relative replay, model tiers, scenes, and policy. A segmented hard
+cut switches Absolute ECI and Relative LVLH presentation while both use the same
+mission clock; neither mode writes back or propagates replacement truth.
+
 ### R0.1 · Promote replay and asset manifests to reusable adapters — **M**
 
 Move the app-local strict `replay/1.0` parser and `dvgl/proximity-assets/0.1` manifest

@@ -32,11 +32,19 @@ const fixture = {
     },
   },
   scenes: { replay: "replay/approach.json", scenario: "config/scenario.json" },
+  evidence: {
+    proximity_gate: "evidence/proximity-gate.json",
+    absolute_chaser_ephemeris: "evidence/chaser-absolute.json",
+    absolute_target_ephemeris: "evidence/target-absolute.json",
+  },
   files: [
     { path: "models/client.high.glb", sha256: digest },
     { path: "models/chaser.high.glb", sha256: digest },
     { path: "replay/approach.json", sha256: digest },
     { path: "config/scenario.json", sha256: digest },
+    { path: "evidence/proximity-gate.json", sha256: digest },
+    { path: "evidence/chaser-absolute.json", sha256: digest },
+    { path: "evidence/target-absolute.json", sha256: digest },
   ],
 };
 
