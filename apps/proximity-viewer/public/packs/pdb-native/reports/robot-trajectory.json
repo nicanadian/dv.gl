@@ -1,0 +1,25 @@
+{
+  "authority": "visual_proxy_advisory",
+  "collision_free": true,
+  "minimum_clearance_m": 0.7637690293750128,
+  "robot": "restore_l_class_servicing_arm",
+  "sample_count": 11,
+  "schema_version": "robot_trajectory_report/v1",
+  "source_accepted": true,
+  "source_schema_version": "robot_joint_trajectory/1.0",
+  "swept_aabb_m": {
+    "maximum": [
+      2.278816838236208,
+      0.23,
+      0.42277578433145624
+    ],
+    "minimum": [
+      -0.23,
+      -0.23,
+      -0.35597314259997426
+    ]
+  },
+  "trajectory_id": "pdb_native_ready_to_pregrasp_001",
+  "unsupported_as_admission_evidence": true,
+  "violations": []
+}

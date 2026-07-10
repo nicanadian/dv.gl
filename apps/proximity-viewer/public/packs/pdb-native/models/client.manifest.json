@@ -1,0 +1,338 @@
+{
+  "archetype": "large_geo_comms",
+  "asset_id": "gltf-model-builder:rpo_demo_client_proxy",
+  "attachment_frames": [
+    {
+      "accuracy": "placeholder",
+      "direction": [
+        0.0,
+        0.0,
+        -1.0
+      ],
+      "name": "payload_boresight",
+      "orientation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "position": [
+        0.0,
+        0.0,
+        -1.2
+      ],
+      "role": "payload_boresight"
+    },
+    {
+      "accuracy": "placeholder",
+      "direction": [
+        0.0,
+        0.0,
+        -1.0
+      ],
+      "name": "nadir_vector",
+      "orientation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "position": [
+        0.0,
+        0.0,
+        -1.2
+      ],
+      "role": "nadir_vector"
+    },
+    {
+      "accuracy": "placeholder",
+      "direction": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "name": "zenith_vector",
+      "orientation": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "position": [
+        0.0,
+        0.0,
+        1.2
+      ],
+      "role": "zenith_vector"
+    },
+    {
+      "accuracy": "placeholder",
+      "direction": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "name": "velocity_axis",
+      "orientation": [
+        0.0,
+        -0.7071067811865475,
+        0.0,
+        0.7071067811865475
+      ],
+      "position": [
+        1.1,
+        0.0,
+        0.0
+      ],
+      "role": "velocity_axis"
+    },
+    {
+      "accuracy": "placeholder",
+      "direction": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "name": "solar_array_axis",
+      "orientation": [
+        0.7071067811865475,
+        -0.0,
+        0.0,
+        0.7071067811865475
+      ],
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "role": "solar_array_axis"
+    },
+    {
+      "accuracy": "placeholder",
+      "direction": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "name": "docking_port",
+      "orientation": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "position": [
+        0.0,
+        0.0,
+        1.2
+      ],
+      "role": "docking_port"
+    },
+    {
+      "accuracy": "estimated",
+      "direction": [
+        -1.0,
+        0.0,
+        0.0
+      ],
+      "feature_id": "apogee_nozzle_exit",
+      "name": "grapple_fixture",
+      "orientation": [
+        0.0,
+        0.7071067811865475,
+        0.0,
+        0.7071067811865475
+      ],
+      "position": [
+        -1.6500000000000001,
+        0.0,
+        0.0
+      ],
+      "role": "grapple_fixture"
+    },
+    {
+      "accuracy": "estimated",
+      "direction": [
+        -1.0,
+        0.0,
+        0.0
+      ],
+      "name": "thruster_cluster",
+      "orientation": [
+        0.0,
+        0.7071067811865475,
+        0.0,
+        0.7071067811865475
+      ],
+      "position": [
+        -1.1800000000000002,
+        0.55,
+        -0.48
+      ],
+      "role": "thruster_cluster"
+    },
+    {
+      "accuracy": "estimated",
+      "direction": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "feature_id": "zenith_berth_pad",
+      "name": "berthing_target",
+      "orientation": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "position": [
+        0.0,
+        0.0,
+        1.25
+      ],
+      "role": "berthing_target"
+    }
+  ],
+  "collision": {
+    "volumes": [
+      {
+        "center": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "kind": "box",
+        "name": "bus_hull",
+        "role": "bus_hull",
+        "size": [
+          2.24,
+          2.04,
+          2.44
+        ]
+      },
+      {
+        "center": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "kind": "box",
+        "name": "array_span",
+        "role": "array_span",
+        "size": [
+          2.2,
+          10.5,
+          0.2
+        ]
+      },
+      {
+        "center": [
+          -1.6500000000000001,
+          0.0,
+          0.0
+        ],
+        "feature_id": "apogee_nozzle_exit",
+        "kind": "sphere",
+        "name": "keepout_apogee_nozzle_exit",
+        "radius": 0.4,
+        "role": "feature_keepout"
+      },
+      {
+        "center": [
+          -2.6500000000000004,
+          0.0,
+          0.0
+        ],
+        "direction": [
+          -1.0,
+          0.0,
+          0.0
+        ],
+        "feature_id": "apogee_nozzle_exit",
+        "height": 2.0,
+        "kind": "capsule",
+        "name": "corridor_apogee_nozzle_exit",
+        "radius": 0.26,
+        "role": "approach_corridor"
+      },
+      {
+        "center": [
+          0.0,
+          0.0,
+          1.25
+        ],
+        "feature_id": "zenith_berth_pad",
+        "kind": "sphere",
+        "name": "keepout_berthing_target",
+        "radius": 0.35,
+        "role": "feature_keepout"
+      },
+      {
+        "center": [
+          0.0,
+          0.0,
+          2.0
+        ],
+        "direction": [
+          0.0,
+          0.0,
+          1.0
+        ],
+        "feature_id": "zenith_berth_pad",
+        "height": 1.5,
+        "kind": "capsule",
+        "name": "corridor_berthing_target",
+        "radius": 0.25,
+        "role": "approach_corridor"
+      }
+    ]
+  },
+  "com_offset_m": [
+    -0.15,
+    0.0,
+    0.0
+  ],
+  "forward": [
+    0.0,
+    0.0,
+    -1.0
+  ],
+  "frame_contract": "skframe/v1",
+  "lods": {
+    "high": {
+      "sha256": "a8c46a094af87ebead38e6681aabcf3b3670ffb5b2129d08e0591ee30bc13c89",
+      "texture_resolution": 512,
+      "triangles": 2996,
+      "uri": "client.high.glb"
+    },
+    "low": {
+      "sha256": "5af8fa90ceb1ffe7f912bde522f01af7a9bba59c1ef587d834128d4444c491ab",
+      "texture_resolution": 512,
+      "triangles": 792,
+      "uri": "client.low.glb"
+    },
+    "medium": {
+      "sha256": "78eb777d5549b7f95e1b319479ed9c0a19bb8a39ba23fbea5b25cb770cdec19c",
+      "texture_resolution": 512,
+      "triangles": 1832,
+      "uri": "client.medium.glb"
+    }
+  },
+  "name": "rpo_demo_client_proxy",
+  "origin_policy": "visual_center",
+  "provenance": {
+    "accuracy_tier": "rpo_presentation",
+    "model_scope": "class_proxy",
+    "not_official_model": true,
+    "source_basis": "Generic GEO-class bus; apogee-motor nozzle class dimensions estimated (see docs/rpo_feature_dimensions.md). No vendor geometry.",
+    "visual_accuracy": "proxy"
+  },
+  "schema_version": "manifest/v1",
+  "units": "meters",
+  "up": [
+    0.0,
+    1.0,
+    0.0
+  ]
+}

@@ -16,6 +16,7 @@ import {
 } from "lucide";
 import "./style.css";
 import { absoluteStateAt, parseAbsolutePair } from "./absolute.js";
+import { jointStateAt, parseJointTrajectory, parseRobotJointModel } from "./jointTrajectory.js";
 import { parseReplay, replayStateAt } from "./replay.js";
 import {
   type FocusMode,
@@ -222,14 +223,26 @@ async function start(): Promise<void> {
   renderIcons();
 
   const pack = parseViewerPack(await fetchJson(`${PACK_ROOT}/pack.json`));
-  const [replayValue, scenarioValue, chaserValue, targetValue, gateValue] = await Promise.all([
+  const [
+    replayValue,
+    scenarioValue,
+    chaserValue,
+    targetValue,
+    gateValue,
+    robotValue,
+    jointTrajectoryValue,
+  ] = await Promise.all([
     fetchJson(packAssetUrl(PACK_ROOT, pack.scenes.replay)),
     fetchJson(packAssetUrl(PACK_ROOT, pack.scenes.scenario)),
     fetchJson(packAssetUrl(PACK_ROOT, pack.evidence.absolute_chaser_ephemeris)),
     fetchJson(packAssetUrl(PACK_ROOT, pack.evidence.absolute_target_ephemeris)),
     fetchJson(packAssetUrl(PACK_ROOT, pack.evidence.proximity_gate)),
+    fetchJson(packAssetUrl(PACK_ROOT, pack.robot.document)),
+    fetchJson(packAssetUrl(PACK_ROOT, pack.robot.trajectory)),
   ]);
   const replay = parseReplay(replayValue);
+  const robot = parseRobotJointModel(robotValue);
+  const jointTrajectory = parseJointTrajectory(jointTrajectoryValue, robot, replay);
   const scenario = parsePackScenario(scenarioValue);
   const absolutePair = parseAbsolutePair(chaserValue, targetValue, gateValue);
   if (absolutePair.epochMs !== replay.epochMs || absolutePair.durationSec !== replay.durationSec) {
@@ -276,7 +289,12 @@ async function start(): Promise<void> {
     scene.loadVehicle("chaser", chaser.uri),
     scene.loadVehicle("target", target.uri),
   ]);
-  await scene.loadMountedRobot(packAssetUrl(PACK_ROOT, pack.robot.glb), pack.robot.base_frame);
+  await scene.loadMountedRobot(
+    packAssetUrl(PACK_ROOT, pack.robot.glb),
+    pack.robot.base_frame,
+    robot,
+  );
+  scene.setRobotJointState(jointStateAt(jointTrajectory, 0));
   setLoading(false);
 
   element<HTMLElement>("#mission-name").textContent = replay.missionId;
@@ -417,6 +435,7 @@ async function start(): Promise<void> {
     }
     const state = replayStateAt(replay, clock.currentSeconds);
     const absolute = absoluteStateAt(absolutePair, clock.currentSeconds);
+    scene.setRobotJointState(jointStateAt(jointTrajectory, state.timeSec));
     scene.render(state, absolute);
     slider.value = String(state.timeSec);
     element<HTMLElement>("#elapsed-time").textContent = formatElapsed(state.timeSec);

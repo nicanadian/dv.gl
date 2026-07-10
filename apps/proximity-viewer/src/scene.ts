@@ -7,6 +7,7 @@ import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import type { AbsolutePair, AbsoluteSample } from "./absolute.js";
+import type { RobotJointModel } from "./jointTrajectory.js";
 import type { InterpolatedReplayState, ParsedReplay, QuaternionXyzw } from "./replay.js";
 
 export type VehicleRole = "target" | "chaser";
@@ -123,6 +124,10 @@ export class ProximityScene {
   private focusMode: FocusMode = "overview";
   private presentationMode: PresentationMode = "relative";
   private selectionHandler?: (role: VehicleRole) => void;
+  private readonly robotJoints = new Map<
+    string,
+    { readonly joint: RobotJointModel["joints"][number]; readonly node: THREE.Object3D }
+  >();
 
   constructor(
     private readonly host: HTMLElement,
@@ -273,7 +278,7 @@ export class ProximityScene {
     root.add(gltf.scene);
   }
 
-  async loadMountedRobot(uri: string, baseFrame: string): Promise<void> {
+  async loadMountedRobot(uri: string, baseFrame: string, robot: RobotJointModel): Promise<void> {
     const mount = this.chaserRoot.getObjectByName(baseFrame);
     if (!mount) throw new Error(`chaser visual proxy is missing robot mount ${baseFrame}`);
     const gltf = await this.loader.loadAsync(uri);
@@ -285,7 +290,51 @@ export class ProximityScene {
         child.receiveShadow = false;
       }
     });
+    this.robotJoints.clear();
+    for (const joint of robot.joints) {
+      const matches: THREE.Object3D[] = [];
+      gltf.scene.traverse((child) => {
+        if (child.userData.robot_joint === joint.name) matches.push(child);
+      });
+      if (matches.length !== 1) {
+        throw new Error(`robot GLB must contain exactly one joint node for ${joint.name}`);
+      }
+      const node = matches[0];
+      if (!node) throw new Error(`robot GLB is missing joint metadata for ${joint.name}`);
+      const embeddedAxis = Array.isArray(node.userData.axis) ? node.userData.axis.map(Number) : [];
+      if (
+        node.userData.robot_joint !== joint.name ||
+        node.userData.joint_type !== joint.type ||
+        embeddedAxis.length !== 3 ||
+        embeddedAxis.some((value, index) => value !== joint.axis[index])
+      ) {
+        throw new Error(`robot GLB joint metadata drift for ${joint.name}`);
+      }
+      this.robotJoints.set(joint.name, { joint, node });
+    }
     mount.add(gltf.scene);
+  }
+
+  setRobotJointState(positions: Readonly<Record<string, number>>): void {
+    if (Object.keys(positions).length !== this.robotJoints.size) {
+      throw new Error("robot joint state does not match the mounted robot");
+    }
+    for (const [name, binding] of this.robotJoints) {
+      const value = positions[name];
+      if (value === undefined || !Number.isFinite(value)) {
+        throw new Error(`robot joint state is missing ${name}`);
+      }
+      if (value < binding.joint.lower || value > binding.joint.upper) {
+        throw new Error(`robot joint state exceeds ${name} limits`);
+      }
+      const axis = new THREE.Vector3(...binding.joint.axis);
+      if (binding.joint.type === "revolute") {
+        binding.node.quaternion.setFromAxisAngle(axis, value);
+      } else {
+        binding.node.position.copy(axis.multiplyScalar(value));
+      }
+    }
+    this.renderer.domElement.dataset.robotJointState = JSON.stringify(positions);
   }
 
   setFocus(mode: FocusMode): void {

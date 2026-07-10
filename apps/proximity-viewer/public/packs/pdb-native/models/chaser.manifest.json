@@ -1,0 +1,348 @@
+{
+  "archetype": "optical_imaging_sat",
+  "asset_id": "gltf-model-builder:rpo_demo_servicer_proxy",
+  "attachment_frames": [
+    {
+      "accuracy": "estimated",
+      "direction": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "name": "payload_boresight",
+      "orientation": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "position": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "role": "payload_boresight"
+    },
+    {
+      "accuracy": "placeholder",
+      "direction": [
+        0.0,
+        0.0,
+        -1.0
+      ],
+      "name": "nadir_vector",
+      "orientation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "position": [
+        0.0,
+        0.0,
+        -0.75
+      ],
+      "role": "nadir_vector"
+    },
+    {
+      "accuracy": "placeholder",
+      "direction": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "name": "zenith_vector",
+      "orientation": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "position": [
+        0.0,
+        0.0,
+        0.75
+      ],
+      "role": "zenith_vector"
+    },
+    {
+      "accuracy": "placeholder",
+      "direction": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "name": "velocity_axis",
+      "orientation": [
+        0.0,
+        -0.7071067811865475,
+        0.0,
+        0.7071067811865475
+      ],
+      "position": [
+        0.9,
+        0.0,
+        0.0
+      ],
+      "role": "velocity_axis"
+    },
+    {
+      "accuracy": "placeholder",
+      "direction": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "name": "solar_array_axis",
+      "orientation": [
+        0.7071067811865475,
+        -0.0,
+        0.0,
+        0.7071067811865475
+      ],
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "role": "solar_array_axis"
+    },
+    {
+      "accuracy": "estimated",
+      "direction": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "feature_id": "forward_soft_dock",
+      "name": "docking_port",
+      "orientation": [
+        0.0,
+        -0.7071067811865475,
+        0.0,
+        0.7071067811865475
+      ],
+      "position": [
+        1.02,
+        0.0,
+        0.0
+      ],
+      "role": "docking_port"
+    },
+    {
+      "accuracy": "placeholder",
+      "direction": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "name": "grapple_fixture",
+      "orientation": [
+        0.7071067811865475,
+        -0.0,
+        0.0,
+        0.7071067811865475
+      ],
+      "position": [
+        0.9,
+        0.27999999999999997,
+        0.0
+      ],
+      "role": "grapple_fixture"
+    },
+    {
+      "accuracy": "estimated",
+      "direction": [
+        -1.0,
+        0.0,
+        0.0
+      ],
+      "name": "thruster_cluster",
+      "orientation": [
+        0.0,
+        0.7071067811865475,
+        0.0,
+        0.7071067811865475
+      ],
+      "position": [
+        -0.9500000000000001,
+        0.0,
+        0.0
+      ],
+      "role": "thruster_cluster"
+    },
+    {
+      "accuracy": "estimated",
+      "direction": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "feature_id": "sensor:inspection_lidar",
+      "name": "sensor_inspection_lidar",
+      "orientation": [
+        0.0,
+        -0.7071067811865475,
+        0.0,
+        0.7071067811865475
+      ],
+      "position": [
+        0.98,
+        0.24499999999999997,
+        0.15000000000000002
+      ],
+      "role": "antenna_boresight"
+    },
+    {
+      "accuracy": "estimated",
+      "direction": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "feature_id": "servicer_arm_base",
+      "name": "arm_base",
+      "orientation": [
+        0.7071067811865475,
+        -0.0,
+        0.0,
+        0.7071067811865475
+      ],
+      "position": [
+        0.18000000000000002,
+        0.76,
+        0.07500000000000001
+      ],
+      "role": "arm_base"
+    }
+  ],
+  "collision": {
+    "volumes": [
+      {
+        "center": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "kind": "box",
+        "name": "bus_hull",
+        "role": "bus_hull",
+        "size": [
+          1.84,
+          1.44,
+          1.54
+        ]
+      },
+      {
+        "center": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "kind": "box",
+        "name": "array_span",
+        "role": "array_span",
+        "size": [
+          1.6,
+          6.0,
+          0.2
+        ]
+      },
+      {
+        "center": [
+          1.02,
+          0.0,
+          0.0
+        ],
+        "feature_id": "forward_soft_dock",
+        "kind": "sphere",
+        "name": "keepout_forward_soft_dock",
+        "radius": 0.5,
+        "role": "feature_keepout"
+      },
+      {
+        "center": [
+          2.27,
+          0.0,
+          0.0
+        ],
+        "direction": [
+          1.0,
+          0.0,
+          0.0
+        ],
+        "feature_id": "forward_soft_dock",
+        "height": 2.5,
+        "kind": "capsule",
+        "name": "corridor_forward_soft_dock",
+        "radius": 0.325,
+        "role": "approach_corridor"
+      },
+      {
+        "center": [
+          6.98,
+          0.24499999999999997,
+          0.15000000000000002
+        ],
+        "direction": [
+          1.0,
+          0.0,
+          0.0
+        ],
+        "feature_id": "sensor:inspection_lidar",
+        "height": 12.0,
+        "kind": "capsule",
+        "name": "fov_inspection_lidar",
+        "radius": 1.6076951545867362,
+        "role": "equipment"
+      }
+    ]
+  },
+  "com_offset_m": [
+    0.05,
+    0.0,
+    -0.05
+  ],
+  "forward": [
+    0.0,
+    0.0,
+    -1.0
+  ],
+  "frame_contract": "skframe/v1",
+  "lods": {
+    "high": {
+      "sha256": "725c1bdcd4e164fccdad5297be6f64348ab4d393bc5cab9e37619a19c9938d61",
+      "texture_resolution": 512,
+      "triangles": 2788,
+      "uri": "chaser.high.glb"
+    },
+    "low": {
+      "sha256": "ab6a034db988d9a715ec0d1440d0c72ca22f4c7bf1e795dee03c9857e1906966",
+      "texture_resolution": 512,
+      "triangles": 332,
+      "uri": "chaser.low.glb"
+    },
+    "medium": {
+      "sha256": "d1a16447ce003acbad7add52aa451c63124c6cf976b536dd1f9313020d8f5251",
+      "texture_resolution": 512,
+      "triangles": 1652,
+      "uri": "chaser.medium.glb"
+    }
+  },
+  "name": "rpo_demo_servicer_proxy",
+  "origin_policy": "visual_center",
+  "provenance": {
+    "accuracy_tier": "rpo_presentation",
+    "model_scope": "class_proxy",
+    "not_official_model": true,
+    "source_basis": "Generic servicer-class bus; soft-capture docking ring is a generic class proxy (docs/rpo_feature_dimensions.md), not a proprietary docking system.",
+    "visual_accuracy": "proxy"
+  },
+  "schema_version": "manifest/v1",
+  "units": "meters",
+  "up": [
+    0.0,
+    1.0,
+    0.0
+  ]
+}

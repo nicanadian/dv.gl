@@ -39,5 +39,6 @@
   },
   "proximity_gate": "evidence/proximity-gate.json",
   "replay": "replay/approach.json",
+  "robot_joint_trajectory": "evidence/robot-joint-trajectory.json",
   "schema_version": "rpo_scenario/v1"
 }

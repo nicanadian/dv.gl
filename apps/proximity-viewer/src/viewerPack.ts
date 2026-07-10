@@ -39,12 +39,15 @@ export interface ViewerPack {
     readonly base_frame: string;
     readonly base_frame_resolved: true;
     readonly tool_frame: string;
+    readonly trajectory: string;
+    readonly trajectory_report: string;
   };
   readonly scenes: { readonly replay: string; readonly scenario: string };
   readonly evidence: {
     readonly proximity_gate: string;
     readonly absolute_chaser_ephemeris: string;
     readonly absolute_target_ephemeris: string;
+    readonly robot_joint_trajectory: string;
   };
   readonly files: readonly PackFile[];
 }
@@ -109,14 +112,24 @@ export function parseViewerPack(value: unknown): ViewerPack {
     !isSafeRelativePath(value.robot.document) ||
     typeof value.robot.base_frame !== "string" ||
     value.robot.base_frame_resolved !== true ||
-    typeof value.robot.tool_frame !== "string"
+    typeof value.robot.tool_frame !== "string" ||
+    !isSafeRelativePath(value.robot.trajectory) ||
+    !isSafeRelativePath(value.robot.trajectory_report)
   ) {
     throw new Error("viewer pack robot contract mismatch");
   }
   if (!isSafeRelativePath(value.scenes.replay) || !isSafeRelativePath(value.scenes.scenario)) {
     throw new Error("viewer pack replay or scenario path is unsafe");
   }
-  for (const key of ["proximity_gate", "absolute_chaser_ephemeris", "absolute_target_ephemeris"]) {
+  if (value.evidence.robot_joint_trajectory !== value.robot.trajectory) {
+    throw new Error("viewer pack robot trajectory references disagree");
+  }
+  for (const key of [
+    "proximity_gate",
+    "absolute_chaser_ephemeris",
+    "absolute_target_ephemeris",
+    "robot_joint_trajectory",
+  ]) {
     if (!isSafeRelativePath(value.evidence[key])) {
       throw new Error(`viewer pack evidence.${key} path is unsafe`);
     }
@@ -145,6 +158,8 @@ export function parseViewerPack(value: unknown): ViewerPack {
     value.models.chaser.tiers.high,
     value.robot.glb,
     value.robot.document,
+    value.robot.trajectory,
+    value.robot.trajectory_report,
   ] as string[];
   for (const path of requiredPaths) {
     if (!records.has(path)) throw new Error(`viewer pack does not manifest ${path}`);

@@ -7,7 +7,8 @@
   "evidence": {
     "absolute_chaser_ephemeris": "evidence/chaser-absolute.json",
     "absolute_target_ephemeris": "evidence/target-absolute.json",
-    "proximity_gate": "evidence/proximity-gate.json"
+    "proximity_gate": "evidence/proximity-gate.json",
+    "robot_joint_trajectory": "evidence/robot-joint-trajectory.json"
   },
   "files": [
     {
@@ -39,11 +40,11 @@
       "sha256": "eb6a93e206803e706eae1b3d4717ac8799ca374a10ed5eaab3cffd8717a62e0f"
     },
     {
-      "bytes": 1308,
+      "bytes": 1376,
       "media_type": "application/json",
       "path": "config/scenario.json",
       "role": "config",
-      "sha256": "eed71b059fd21ad2662ce20ef2070aed60131bf4c3a0ba956b415161e6be169d"
+      "sha256": "211ac221b2222851a49c7b680b8f747e74845e732969a9763bd2dfc442f71203"
     },
     {
       "bytes": 5521,
@@ -58,6 +59,13 @@
       "path": "evidence/proximity-gate.json",
       "role": "evidence",
       "sha256": "3ea798bcb9d9a37984222cc3e3573ef54faef3015915af7ffd0daa43977fa8a4"
+    },
+    {
+      "bytes": 5826,
+      "media_type": "application/json",
+      "path": "evidence/robot-joint-trajectory.json",
+      "role": "evidence",
+      "sha256": "e7c30e435a8c87be0db9895e77d80660f1461617cefe008f5f15ab70ef9c4356"
     },
     {
       "bytes": 5519,
@@ -116,6 +124,13 @@
       "sha256": "ab6a034db988d9a715ec0d1440d0c72ca22f4c7bf1e795dee03c9857e1906966"
     },
     {
+      "bytes": 6659,
+      "media_type": "application/json",
+      "path": "models/chaser.manifest.json",
+      "role": "chaser_manifest",
+      "sha256": "60011abf8bc7067b5b8d464f9cf73d0d97f8af14072b9f44dd58389508593483"
+    },
+    {
       "bytes": 479536,
       "media_type": "model/gltf-binary",
       "path": "models/chaser.medium.glb",
@@ -135,6 +150,13 @@
       "path": "models/client.low.glb",
       "role": "client_low_glb",
       "sha256": "5af8fa90ceb1ffe7f912bde522f01af7a9bba59c1ef587d834128d4444c491ab"
+    },
+    {
+      "bytes": 6361,
+      "media_type": "application/json",
+      "path": "models/client.manifest.json",
+      "role": "client_manifest",
+      "sha256": "82e93b82a633f4e407c9cb33f53e18d82db952b6a873854cc39d9deee5d6384d"
     },
     {
       "bytes": 490888,
@@ -165,6 +187,13 @@
       "sha256": "bbfdb96220f046b492264beb0f71c2209ef4457e88ffd2251ead99a2622494ea"
     },
     {
+      "bytes": 622,
+      "media_type": "application/json",
+      "path": "reports/robot-trajectory.json",
+      "role": "report",
+      "sha256": "50a662873c9bf75e3ec7db3dfbaa377e13750d163780b55f89269d8665dcee2c"
+    },
+    {
       "bytes": 5375,
       "media_type": "application/json",
       "path": "scenes/approach-animation.json",
@@ -187,6 +216,7 @@
       "accuracy_tier": "rpo_presentation",
       "attribution_text": "Procedural visual proxies from gltf-model-builder; motion evidence from pdb and Sublime Kinematics; no official vendor geometry.",
       "license_label": "Internal evaluation proxy assets",
+      "manifest": "models/chaser.manifest.json",
       "metadata": "metadata/chaser.json",
       "model_scope": "class_proxy",
       "name": "rpo_demo_servicer_proxy",
@@ -202,6 +232,7 @@
       "accuracy_tier": "rpo_presentation",
       "attribution_text": "Procedural visual proxies from gltf-model-builder; motion evidence from pdb and Sublime Kinematics; no official vendor geometry.",
       "license_label": "Internal evaluation proxy assets",
+      "manifest": "models/client.manifest.json",
       "metadata": "metadata/client.json",
       "model_scope": "class_proxy",
       "name": "rpo_demo_client_proxy",
@@ -250,7 +281,9 @@
     "metadata": "metadata/robot-metadata.json",
     "name": "restore_l_class_servicing_arm",
     "not_official_model": true,
-    "tool_frame": "tool_center_point"
+    "tool_frame": "tool_center_point",
+    "trajectory": "evidence/robot-joint-trajectory.json",
+    "trajectory_report": "reports/robot-trajectory.json"
   },
   "scenario_id": "pdb_native_reference_001",
   "scenes": {

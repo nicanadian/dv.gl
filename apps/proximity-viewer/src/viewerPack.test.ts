@@ -40,12 +40,15 @@ const fixture = {
     base_frame: "arm_base",
     base_frame_resolved: true,
     tool_frame: "tool0",
+    trajectory: "evidence/robot-joint-trajectory.json",
+    trajectory_report: "reports/robot-trajectory.json",
   },
   scenes: { replay: "replay/approach.json", scenario: "config/scenario.json" },
   evidence: {
     proximity_gate: "evidence/proximity-gate.json",
     absolute_chaser_ephemeris: "evidence/chaser-absolute.json",
     absolute_target_ephemeris: "evidence/target-absolute.json",
+    robot_joint_trajectory: "evidence/robot-joint-trajectory.json",
   },
   files: [
     { path: "models/client.high.glb", sha256: digest },
@@ -57,6 +60,8 @@ const fixture = {
     { path: "evidence/target-absolute.json", sha256: digest },
     { path: "models/robot.high.glb", sha256: digest },
     { path: "metadata/robot.json", sha256: digest },
+    { path: "evidence/robot-joint-trajectory.json", sha256: digest },
+    { path: "reports/robot-trajectory.json", sha256: digest },
   ],
 };
 
