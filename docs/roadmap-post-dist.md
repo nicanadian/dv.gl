@@ -95,6 +95,30 @@ incidence-angle shading to the collect footprint. **Deps.** none.
 RPO/OSAM is about **relative geometry between two spacecraft** — you cannot do it with
 points, and it needs a **relative frame**, not cislunar. This raises S1 and adds R1.
 
+### R0 · Read-only proximity viewer vertical slice — **done 2026-07-10**
+
+`apps/proximity-viewer` proves the leaf presentation path with a strict `replay/1.0`
+consumer, the deterministic `@dvgl/core` mission clock and phase marks, a target-centered
+LVLH/RIC scene, trajectory/corridor/keep-out overlays, inspection controls, and three
+generated `gltf-model-builder` visual proxies. The app uses one Three.js WebGL canvas; it
+does not interleave WebGL with the dv.gl WebGPU canvas or move viewer state back into any
+admission/control path. **Exit.** Desktop/mobile build, replay parser tests, generated-asset
+hash manifest, and browser render checks pass.
+
+### R0.1 · Promote replay and asset manifests to reusable adapters — **M**
+
+Move the app-local strict `replay/1.0` parser and `dvgl/proximity-assets/0.1` manifest
+loader behind reusable packages once the second consumer arrives. Preserve clock-as-data,
+visual-only authority, frame/unit validation, and content hashes. **Deps.** R0 plus a second
+consumer proving the API shape.
+
+### R0.2 · Attitude, attachment frames, and articulated servicing assets — **M→L**
+
+Consume explicit body attitude and named glTF attachment/joint nodes. Never infer grapple
+metrology or collision truth from render meshes. This item depends on the corresponding
+asset-pack and robotics export work in `gltf-model-builder`; until then the chaser uses an
+explicit viewer-only aim-at pose. **Deps.** S1a and glTF consumer-pack tickets.
+
 ### S1a · Oriented spacecraft body + body axes — **S**
 Instanced body glyph per object oriented by the attitude quaternion; body axes triad.
 **Panel (astro) — pin the contract in writing:** quaternion is **scalar-last `[x,y,z,w]`**

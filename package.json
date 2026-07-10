@@ -9,13 +9,14 @@
     "node": ">=24"
   },
   "scripts": {
-    "build": "pnpm run build:packages && pnpm run build:viewer && pnpm --filter @dvgl/bench-runner build",
+    "build": "pnpm run build:packages && pnpm run build:viewer && pnpm run build:proximity && pnpm --filter @dvgl/bench-runner build",
     "typecheck": "pnpm run build:packages && pnpm run build:viewer && pnpm -r --workspace-concurrency=4 run typecheck",
     "test": "vitest run",
     "lint": "biome check .",
     "format": "biome format --write .",
     "build:packages": "tsc -b tsconfig.json",
-    "build:viewer": "pnpm --filter @dvgl/viewer build"
+    "build:viewer": "pnpm --filter @dvgl/viewer build",
+    "build:proximity": "pnpm --filter @dvgl/proximity-viewer build"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.0.6",

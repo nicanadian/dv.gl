@@ -32,6 +32,18 @@ rendering.
 | `@dvgl/benchmarks` | Reproducible benchmark scenes and the metric harness |
 | `@dvgl/validate` | Reference-comparison tooling for correctness validation |
 
+## Apps
+
+| App | Responsibility |
+|---|---|
+| `apps/bench-runner` | Rendering and numerical benchmark surfaces |
+| `apps/proximity-viewer` | Read-only target-relative `replay/1.0` viewer with glTF visual proxies |
+
+The proximity viewer is the first Phase 2 RPO/OSAM vertical slice. It uses the
+deterministic `@dvgl/core` mission clock, loads generated visual-proxy GLBs from
+`gltf-model-builder`, and treats replay evidence as its only transform source. See
+[its README](apps/proximity-viewer/README.md) for setup and contract boundaries.
+
 ## Standards interop
 
 Intended ingestion and interchange formats: TLE, OMM (GP JSON), OEM ephemeris, and a

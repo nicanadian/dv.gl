@@ -1,7 +1,15 @@
 {
   "$schema": "https://biomejs.dev/schemas/2.5.2/schema.json",
   "vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": true },
-  "files": { "includes": ["packages/**", "*.json", "*.md"] },
+  "files": {
+    "includes": [
+      "packages/**",
+      "apps/proximity-viewer/**",
+      "!apps/proximity-viewer/public",
+      "*.json",
+      "*.md"
+    ]
+  },
   "formatter": {
     "enabled": true,
     "indentStyle": "space",
