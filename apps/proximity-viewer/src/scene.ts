@@ -273,6 +273,21 @@ export class ProximityScene {
     root.add(gltf.scene);
   }
 
+  async loadMountedRobot(uri: string, baseFrame: string): Promise<void> {
+    const mount = this.chaserRoot.getObjectByName(baseFrame);
+    if (!mount) throw new Error(`chaser visual proxy is missing robot mount ${baseFrame}`);
+    const gltf = await this.loader.loadAsync(uri);
+    gltf.scene.name = "mounted-servicing-robot";
+    gltf.scene.traverse((child) => {
+      child.userData.vehicleRole = "chaser";
+      if (child instanceof THREE.Mesh) {
+        child.castShadow = false;
+        child.receiveShadow = false;
+      }
+    });
+    mount.add(gltf.scene);
+  }
+
   setFocus(mode: FocusMode): void {
     this.focusMode = mode;
     if (mode === "overview") {

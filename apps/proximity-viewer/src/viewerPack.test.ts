@@ -31,6 +31,16 @@ const fixture = {
       tiers: { high: "models/chaser.high.glb" },
     },
   },
+  robot: {
+    name: "servicing_arm",
+    accuracy_tier: "rpo_interaction",
+    not_official_model: true,
+    glb: "models/robot.high.glb",
+    document: "metadata/robot.json",
+    base_frame: "arm_base",
+    base_frame_resolved: true,
+    tool_frame: "tool0",
+  },
   scenes: { replay: "replay/approach.json", scenario: "config/scenario.json" },
   evidence: {
     proximity_gate: "evidence/proximity-gate.json",
@@ -45,6 +55,8 @@ const fixture = {
     { path: "evidence/proximity-gate.json", sha256: digest },
     { path: "evidence/chaser-absolute.json", sha256: digest },
     { path: "evidence/target-absolute.json", sha256: digest },
+    { path: "models/robot.high.glb", sha256: digest },
+    { path: "metadata/robot.json", sha256: digest },
   ],
 };
 

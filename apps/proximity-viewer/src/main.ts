@@ -276,6 +276,7 @@ async function start(): Promise<void> {
     scene.loadVehicle("chaser", chaser.uri),
     scene.loadVehicle("target", target.uri),
   ]);
+  await scene.loadMountedRobot(packAssetUrl(PACK_ROOT, pack.robot.glb), pack.robot.base_frame);
   setLoading(false);
 
   element<HTMLElement>("#mission-name").textContent = replay.missionId;

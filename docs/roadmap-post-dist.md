@@ -129,7 +129,9 @@ explicit viewer-only aim-at pose. **Deps.** S1a and glTF consumer-pack tickets.
 **Attitude sub-step done 2026-07-10.** Native pdb NADIR body-to-ECI scalar-last
 quaternions now survive SK replay and the viewer pack. The app derives
 body-to-LVLH from the target absolute basis and no longer uses an aim-at pose.
-Named joint articulation remains the open part of R0.2.
+The packaged robot now mounts through the audited `arm_base` node in its static
+`ready` configuration. Time-varying joint articulation remains blocked on a
+versioned trajectory artifact; the viewer will not invent presentation motion.
 
 ### S1a · Oriented spacecraft body + body axes — **S**
 Instanced body glyph per object oriented by the attitude quaternion; body axes triad.

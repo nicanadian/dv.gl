@@ -30,6 +30,16 @@ export interface ViewerPack {
     readonly client: PackModel;
     readonly chaser: PackModel;
   };
+  readonly robot: {
+    readonly name: string;
+    readonly accuracy_tier: string;
+    readonly not_official_model: true;
+    readonly glb: string;
+    readonly document: string;
+    readonly base_frame: string;
+    readonly base_frame_resolved: true;
+    readonly tool_frame: string;
+  };
   readonly scenes: { readonly replay: string; readonly scenario: string };
   readonly evidence: {
     readonly proximity_gate: string;
@@ -81,11 +91,28 @@ export function parseViewerPack(value: unknown): ViewerPack {
   if (value.authority !== "visual_only") {
     throw new Error("viewer pack must be visual_only");
   }
-  if (!isRecord(value.models) || !isRecord(value.scenes) || !isRecord(value.evidence)) {
-    throw new Error("viewer pack models, scenes, and evidence are required");
+  if (
+    !isRecord(value.models) ||
+    !isRecord(value.robot) ||
+    !isRecord(value.scenes) ||
+    !isRecord(value.evidence)
+  ) {
+    throw new Error("viewer pack models, robot, scenes, and evidence are required");
   }
   validateModel(value.models.client, "client");
   validateModel(value.models.chaser, "chaser");
+  if (
+    typeof value.robot.name !== "string" ||
+    typeof value.robot.accuracy_tier !== "string" ||
+    value.robot.not_official_model !== true ||
+    !isSafeRelativePath(value.robot.glb) ||
+    !isSafeRelativePath(value.robot.document) ||
+    typeof value.robot.base_frame !== "string" ||
+    value.robot.base_frame_resolved !== true ||
+    typeof value.robot.tool_frame !== "string"
+  ) {
+    throw new Error("viewer pack robot contract mismatch");
+  }
   if (!isSafeRelativePath(value.scenes.replay) || !isSafeRelativePath(value.scenes.scenario)) {
     throw new Error("viewer pack replay or scenario path is unsafe");
   }
@@ -116,6 +143,8 @@ export function parseViewerPack(value: unknown): ViewerPack {
     value.evidence.absolute_target_ephemeris,
     value.models.client.tiers.high,
     value.models.chaser.tiers.high,
+    value.robot.glb,
+    value.robot.document,
   ] as string[];
   for (const path of requiredPaths) {
     if (!records.has(path)) throw new Error(`viewer pack does not manifest ${path}`);

@@ -37,6 +37,9 @@ manifest; the viewer loads only that manifest and its referenced files.
   same pdb run, gate epoch, and deterministic mission clock.
 - Vehicle orientation comes from paired scalar-last pdb body-to-ECI attitude,
   transformed into LVLH from the target absolute basis; no aim-at pose remains.
+- The packaged servicing robot mounts only through the audited `arm_base`
+  node. Its checked `ready` pose is static until a versioned joint trajectory
+  exists; the viewer does not synthesize manipulation motion.
 - Only `skframe/v1`, `LVLH_RIC`, meters, meters/second, and strictly increasing
   replay samples sharing the declared epoch load.
 - GLBs are `not_official_model: true` visual proxies.
