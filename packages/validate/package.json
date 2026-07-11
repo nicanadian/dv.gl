@@ -24,6 +24,6 @@
     "@dvgl/orbits": "workspace:*"
   },
   "devDependencies": {
-    "satellite.js": "^5.0.0"
+    "satellite.js": "^7.0.1"
   }
 }
