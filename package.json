@@ -19,9 +19,9 @@
     "build:proximity": "pnpm --filter @dvgl/proximity-viewer build"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.0.6",
-    "earcut": "3.0.1",
-    "typescript": "^5.8.3",
-    "vitest": "^3.2.4"
+    "@biomejs/biome": "^2.5.3",
+    "earcut": "3.2.3",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.10"
   }
 }
