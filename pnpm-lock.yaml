@@ -51,8 +51,8 @@ importers:
         specifier: 1.143.0
         version: 1.143.0
       satellite.js:
-        specifier: ^5.0.0
-        version: 5.0.0
+        specifier: ^7.0.1
+        version: 7.0.1
       sgp4.gl:
         specifier: 0.1.5-beta
         version: 0.1.5-beta
@@ -122,8 +122,8 @@ importers:
         version: link:../core
     devDependencies:
       satellite.js:
-        specifier: ^5.0.0
-        version: 5.0.0
+        specifier: ^7.0.1
+        version: 7.0.1
 
   packages/orbits:
     dependencies:
@@ -134,8 +134,8 @@ importers:
         specifier: workspace:*
         version: link:../frames
       satellite.js:
-        specifier: ^5.0.0
-        version: 5.0.0
+        specifier: ^7.0.1
+        version: 7.0.1
 
   packages/validate:
     dependencies:
@@ -150,8 +150,8 @@ importers:
         version: link:../orbits
     devDependencies:
       satellite.js:
-        specifier: ^5.0.0
-        version: 5.0.0
+        specifier: ^7.0.1
+        version: 7.0.1
 
   packages/viewer:
     dependencies:
@@ -162,8 +162,8 @@ importers:
         specifier: ^4.5.0
         version: 4.5.0
       satellite.js:
-        specifier: ^5.0.0
-        version: 5.0.0
+        specifier: ^7.0.1
+        version: 7.0.1
     devDependencies:
       '@dvgl/core':
         specifier: workspace:*
@@ -1365,8 +1365,8 @@ packages:
     engines: {node: '>=18.0.0', npm: '>=8.0.0'}
     hasBin: true
 
-  satellite.js@5.0.0:
-    resolution: {integrity: sha512-ie3yiJ2LJAJIhVUKdYhgp7V0btXKAMImDjRnuaNfJGl8rjwP2HwVIh4HLFcpiXYEiYwXc5fqh5+yZqCe6KIwWw==}
+  satellite.js@7.0.1:
+    resolution: {integrity: sha512-43hMdoom4miUvwX7FkroaHGq4JHIFQRNcUx570xD9KkZjsVssoWxHp8uk6KwDm+lmrW6GTuP2+G4PwvtHfr62A==}
 
   sgp4.gl@0.1.5-beta:
     resolution: {integrity: sha512-V5VtWXW2EABp1/1M4XG3TYBpusIB3zYjrr9yEgxqcOHFqMlIG1+UCi3IbmsV/7eOZEGYj9vhhGdLW7DxPq4Ahg==}
@@ -2547,7 +2547,7 @@ snapshots:
       '@rollup/rollup-win32-x64-msvc': 4.62.2
       fsevents: 2.3.3
 
-  satellite.js@5.0.0: {}
+  satellite.js@7.0.1: {}
 
   sgp4.gl@0.1.5-beta: {}
 
