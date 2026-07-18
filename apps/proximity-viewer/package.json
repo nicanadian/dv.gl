@@ -12,7 +12,7 @@
   },
   "dependencies": {
     "@dvgl/core": "workspace:*",
-    "lucide": "0.468.0",
+    "lucide": "1.25.0",
     "three": "0.171.0"
   },
   "devDependencies": {
