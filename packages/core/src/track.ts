@@ -26,10 +26,12 @@
  * the "allocation-free animation path" of the product hypothesis in miniature.
  */
 
-export type Interpolation = "linear" | "hold";
+export type Interpolation = "linear" | "hold" | "cubic-hermite";
 
 export interface SampledTrackOptions {
   readonly interpolation?: Interpolation;
+  /** Value derivatives per second, aligned with values. Required for cubic Hermite. */
+  readonly derivatives?: Float32Array;
 }
 
 export class SampledTrack {
@@ -38,6 +40,7 @@ export class SampledTrack {
   readonly interpolation: Interpolation;
   private readonly times: Float64Array;
   private readonly values: Float32Array;
+  private readonly derivatives: Float32Array | undefined;
   private memo = 0; // last bracketing left index; sequential access hits it
 
   constructor(
@@ -53,6 +56,9 @@ export class SampledTrack {
     if (values.length !== times.length * stride) {
       throw new Error(`values length ${values.length} != times ${times.length} x stride ${stride}`);
     }
+    if (options?.interpolation === "cubic-hermite" && options.derivatives?.length !== values.length) {
+      throw new Error("cubic-hermite interpolation requires derivatives aligned with values");
+    }
     for (let k = 1; k < times.length; k += 1) {
       const a = times[k - 1];
       const b = times[k];
@@ -65,6 +71,7 @@ export class SampledTrack {
     this.count = times.length;
     this.stride = stride;
     this.interpolation = options?.interpolation ?? "linear";
+    this.derivatives = options?.derivatives;
   }
 
   get startSec(): number {
@@ -94,6 +101,23 @@ export class SampledTrack {
     const t1 = this.times[i + 1] ?? t0;
     const u = t1 > t0 ? (tSec - t0) / (t1 - t0) : 0;
     const base1 = base0 + s;
+    if (this.interpolation === "cubic-hermite" && this.derivatives) {
+      const dt = t1 - t0;
+      const u2 = u * u;
+      const u3 = u2 * u;
+      const h00 = 2 * u3 - 3 * u2 + 1;
+      const h10 = u3 - 2 * u2 + u;
+      const h01 = -2 * u3 + 3 * u2;
+      const h11 = u3 - u2;
+      for (let c = 0; c < s; c += 1) {
+        const v0 = this.values[base0 + c] ?? 0;
+        const v1 = this.values[base1 + c] ?? 0;
+        const d0 = this.derivatives[base0 + c] ?? 0;
+        const d1 = this.derivatives[base1 + c] ?? 0;
+        out[outOffset + c] = h00 * v0 + h10 * dt * d0 + h01 * v1 + h11 * dt * d1;
+      }
+      return true;
+    }
     for (let c = 0; c < s; c += 1) {
       const v0 = this.values[base0 + c] ?? 0;
       const v1 = this.values[base1 + c] ?? 0;

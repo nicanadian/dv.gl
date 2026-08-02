@@ -53,6 +53,7 @@ export interface PropagationSource {
     out: Float32Array,
     ecefEpochMs?: number,
     periodsOut?: Float32Array,
+    halfWindowPeriods?: number,
   ): void;
   /**
    * Write TEME positions (km) at `minutesSinceEpoch` into `out` with stride 3
@@ -176,6 +177,7 @@ export class SatelliteJsSource implements PropagationSource {
     out: Float32Array,
     ecefEpochMs?: number,
     periodsOut?: Float32Array,
+    halfWindowPeriods = 1,
   ): void {
     const n = this.recs.length;
     if (out.length < n * samples * 3) {
@@ -188,7 +190,7 @@ export class SatelliteJsSource implements PropagationSource {
       if (periodsOut !== undefined) periodsOut[k] = period;
       for (let s = 0; s < samples; s += 1) {
         const frac = (s / (samples - 1)) * 2 - 1; // [-1, 1]
-        const tMin = centerMinutes + frac * period;
+        const tMin = centerMinutes + frac * period * halfWindowPeriods;
         const pos = readPosition(satellite.sgp4(rec.satrec, tMin + rec.epochOffsetMinutes));
         const base = (k * samples + s) * 3;
         if (pos === undefined) {

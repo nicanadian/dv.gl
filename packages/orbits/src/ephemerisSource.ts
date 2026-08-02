@@ -58,6 +58,9 @@ export class EphemerisSource implements PropagationSource {
           offsetSec === 0 ? seg.times : shiftTimes(seg.times, offsetSec),
           seg.positions,
           3,
+          seg.velocities
+            ? { interpolation: "cubic-hermite", derivatives: seg.velocities }
+            : undefined,
         );
         this.entries.push({ track, startSec: track.startSec, endSec: track.endSec });
         this.names.push(seg.objectName);
@@ -113,6 +116,7 @@ export class EphemerisSource implements PropagationSource {
     out: Float32Array,
     ecefEpochMs?: number,
     periodsOut?: Float32Array,
+    halfWindowPeriods = 1,
   ): void {
     const n = this.entries.length;
     if (out.length < n * samples * 3) {
@@ -129,7 +133,10 @@ export class EphemerisSource implements PropagationSource {
       if (periodsOut !== undefined) periodsOut[k] = periodSec / 60;
       for (let s = 0; s < samples; s += 1) {
         const frac = (s / (samples - 1)) * 2 - 1;
-        const tSec = Math.min(Math.max(centerSec + frac * periodSec, e.startSec), e.endSec);
+        const tSec = Math.min(
+          Math.max(centerSec + frac * periodSec * halfWindowPeriods, e.startSec),
+          e.endSec,
+        );
         e.track.sampleInto(tSec, this.scratch);
         const base = (k * samples + s) * 3;
         const x = this.scratch[0] ?? Number.NaN;

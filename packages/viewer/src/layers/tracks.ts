@@ -40,6 +40,7 @@ export interface WindowSource {
     out: Float32Array,
     ecefEpochMs?: number,
     periodsOut?: Float32Array,
+    halfWindowPeriods?: number,
   ): void;
 }
 
@@ -60,6 +61,8 @@ export interface TracksLayerOptions {
   readonly radialScale?: number;
   /** Force a single RGBA for all tracks (e.g. a dim ghost) instead of fleet colors. */
   readonly colorRgba?: readonly [number, number, number, number];
+  /** Half-width of the displayed window in orbital periods. Default 1; 0.5 draws one orbit. */
+  readonly halfWindowPeriods?: number;
 }
 
 const SURFACE_LIFT_KM = 8;
@@ -79,6 +82,7 @@ export class TracksLayer implements Layer {
   private readonly recomputeMin: number;
   private readonly radialScale: number;
   private readonly colorRgba: readonly [number, number, number, number] | undefined;
+  private readonly halfWindowPeriods: number;
   private colBuf?: Float32Array;
 
   constructor(opts: TracksLayerOptions) {
@@ -90,6 +94,8 @@ export class TracksLayer implements Layer {
     this.recomputeMin = opts.recomputeMinutes ?? 12;
     this.radialScale = opts.radialScale ?? 1;
     this.colorRgba = opts.colorRgba;
+    this.halfWindowPeriods = opts.halfWindowPeriods ?? 1;
+    if (!(this.halfWindowPeriods > 0)) throw new Error("halfWindowPeriods must be positive");
   }
 
   init(ctx: LayerContext): void {
@@ -130,7 +136,9 @@ export class TracksLayer implements Layer {
         win,
         this.ecef ? frame.epochMs : undefined,
         per,
+        this.halfWindowPeriods,
       );
+      for (let k = 0; k < count; k += 1) per[k] = (per[k] ?? 0) * this.halfWindowPeriods;
       let buf = win;
       if (this.mode === "ground" && this.surfBuf) {
         const n = count * this.samples * 3;

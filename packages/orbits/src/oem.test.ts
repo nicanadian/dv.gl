@@ -75,6 +75,24 @@ describe("parseOem", () => {
     );
     expect(() => parseOem(backwards)).toThrow(/strictly increasing/);
   });
+
+  it("retains velocity vectors when every state supplies them", () => {
+    const withVelocity = SAMPLE.replace(
+      "6874.263449 0.000000 0.000000",
+      "6874.263449 0.000000 0.000000 0.000000 7.600000 0.000000",
+    )
+      .replace(
+        "6859.064586 447.616464 0.000000",
+        "6859.064586 447.616464 0.000000 -0.495000 7.583000 0.000000",
+      )
+      .replace(
+        "6813.596600 892.244664 0.000000",
+        "6813.596600 892.244664 0.000000 -0.987000 7.533000 0.000000",
+      );
+    const segment = parseOem(withVelocity).segments[0];
+    expect(segment?.velocities).toBeDefined();
+    expect(segment?.velocities?.[4]).toBeCloseTo(7.583, 3);
+  });
 });
 
 describe("EphemerisSource", () => {
@@ -122,5 +140,26 @@ describe("sampleWindowInto (orbit tracks)", () => {
     // sat1 last sample clamps to its span end (t=2min sample), never extrapolates
     const last = (0 * S + S - 1) * 3;
     expect(window[last]).toBeCloseTo(6813.5966, 3);
+  });
+
+  it("uses OEM velocity vectors to preserve sparse circular-track curvature", () => {
+    const quarterOrbit = `CCSDS_OEM_VERS = 2.0
+ORIGINATOR = test
+META_START
+OBJECT_NAME = circular
+OBJECT_ID = circular
+CENTER_NAME = EARTH
+REF_FRAME = EME2000
+TIME_SYSTEM = UTC
+META_STOP
+2026-01-01T00:00:00.000Z 7000 0 0 0 7.546 0
+2026-01-01T00:24:17.000Z 0 7000 0 -7.546 0 0
+`;
+    const source = new EphemerisSource(parseOem(quarterOrbit).segments);
+    const out = new Float32Array(3);
+    source.propagateInto(1457 / 120, out);
+    const radius = Math.hypot(out[0] ?? 0, out[1] ?? 0, out[2] ?? 0);
+    expect(radius).toBeGreaterThan(6800);
+    expect(radius).toBeLessThan(7050);
   });
 });

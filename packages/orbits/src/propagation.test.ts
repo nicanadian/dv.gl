@@ -181,6 +181,20 @@ describe("sampleWindowInto (SGP4 orbit tracks)", () => {
     expect(d).toBeLessThan(100);
     expect(() => source.sampleWindowInto(0, S, new Float32Array(3))).toThrow(/too small/);
   });
+
+  it("supports a one-revolution display window without changing propagation", () => {
+    const source = new SatelliteJsSource([obj]);
+    const samples = 129;
+    const window = new Float32Array(samples * 3);
+    source.sampleWindowInto(500, samples, window, undefined, undefined, 0.5);
+    const last = (samples - 1) * 3;
+    const closureKm = Math.hypot(
+      (window[0] ?? 0) - (window[last] ?? 0),
+      (window[1] ?? 0) - (window[last + 1] ?? 0),
+      (window[2] ?? 0) - (window[last + 2] ?? 0),
+    );
+    expect(closureKm).toBeLessThan(100);
+  });
 });
 
 describe("sampleWindowInto ECEF frame (ground-track weave)", () => {

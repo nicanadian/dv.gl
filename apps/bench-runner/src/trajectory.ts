@@ -69,6 +69,7 @@ async function main(): Promise<void> {
     });
     scene.clock.loop = false;
     scene.camera.zoom(0.72);
+    scene.setGraticule(false);
     const fleet = new SatellitesLayer({ pointSizePx: 9 });
     fleet.setSource(source);
     const colors = new Float32Array(source.count * 4);
@@ -76,7 +77,15 @@ async function main(): Promise<void> {
       colors.set(name.includes("REMOVER") ? [0.29, 0.64, 0.89, 1] : [0.94, 0.71, 0.3, 1], index * 4);
     });
     fleet.setColors(colors);
-    scene.add(new TracksLayer({ source, fleet, samples: 129, recomputeMinutes: 30 }));
+    scene.add(
+      new TracksLayer({
+        source,
+        fleet,
+        samples: 129,
+        recomputeMinutes: 30,
+        halfWindowPeriods: 0.5,
+      }),
+    );
     scene.add(fleet);
     const labelsRoot = byId<HTMLElement>("labels");
     const labelPool: HTMLSpanElement[] = [];

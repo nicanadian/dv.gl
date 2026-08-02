@@ -20,8 +20,8 @@
  * spacecraft simulator all emit it). Parses the KVN text form: header, one or more
  * segments (META block + ephemeris state lines), multiple objects per file.
  *
- * Scope (v0, diagnostics-first): TIME_SYSTEM UTC; positions in km (velocities
- * accepted and ignored); REF_FRAME recorded verbatim and surfaced to the caller --
+ * Scope (v0, diagnostics-first): TIME_SYSTEM UTC; positions in km and optional
+ * velocities in km/s; REF_FRAME recorded verbatim and surfaced to the caller --
  * dv.gl renders J2000/EME2000/TEME interchangeably at visualization accuracy, but
  * the frame name travels with the data so nothing silently mixes. Unsupported
  * constructs fail loudly with line numbers, never silently skip.
@@ -38,6 +38,8 @@ export interface OemSegment {
   readonly times: Float64Array;
   /** Positions km, stride 3, aligned with times. */
   readonly positions: Float32Array;
+  /** Velocities km/s, stride 3, aligned with times when supplied on every state. */
+  readonly velocities?: Float32Array;
 }
 
 export interface OemFile {
@@ -109,6 +111,8 @@ export function parseOem(text: string): OemFile {
     // state lines until next META_START / EOF
     const times: number[] = [];
     const positions: number[] = [];
+    const velocities: number[] = [];
+    let hasVelocity: boolean | undefined;
     let epochMs: number | undefined;
     while (!atEnd() && !peek().startsWith("META_START")) {
       const l = peek();
@@ -128,6 +132,20 @@ export function parseOem(text: string): OemFile {
       const z = Number(parts[3]);
       if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) {
         throw new OemError(i, `non-finite position in "${l}"`);
+      }
+      const rowHasVelocity = parts.length >= 7;
+      hasVelocity ??= rowHasVelocity;
+      if (rowHasVelocity !== hasVelocity) {
+        throw new OemError(i, "velocity columns must be present on every state or none");
+      }
+      if (rowHasVelocity) {
+        const vx = Number(parts[4]);
+        const vy = Number(parts[5]);
+        const vz = Number(parts[6]);
+        if (!Number.isFinite(vx) || !Number.isFinite(vy) || !Number.isFinite(vz)) {
+          throw new OemError(i, `non-finite velocity in "${l}"`);
+        }
+        velocities.push(vx, vy, vz);
       }
       epochMs ??= t;
       const rel = (t - epochMs) / 1000;
@@ -149,6 +167,7 @@ export function parseOem(text: string): OemFile {
       epochMs,
       times: new Float64Array(times),
       positions: new Float32Array(positions),
+      ...(hasVelocity ? { velocities: new Float32Array(velocities) } : {}),
     });
   }
 
