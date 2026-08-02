@@ -16,7 +16,7 @@
     {
       "event_id": "guidance-00-node_drift",
       "type": "guidance_phase",
-      "elapsed_s": 0.0,
+      "elapsed_s": 900.0,
       "mode": "node_drift",
       "delta_v_m_s": 0.0,
       "mass_kg": 723.2,
