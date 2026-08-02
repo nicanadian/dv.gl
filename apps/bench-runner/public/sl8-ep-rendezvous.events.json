@@ -1,0 +1,71 @@
+{
+  "schema_version": "trajectory_events/0.1",
+  "events": [
+    {
+      "event_id": "launch-insertion",
+      "type": "launch_insertion",
+      "elapsed_s": 0.0,
+      "authority": "project_assumption"
+    },
+    {
+      "event_id": "remover-separation",
+      "type": "separation",
+      "elapsed_s": 900.0,
+      "authority": "project_assumption"
+    },
+    {
+      "event_id": "guidance-00-node_drift",
+      "type": "guidance_phase",
+      "elapsed_s": 0.0,
+      "mode": "node_drift",
+      "delta_v_m_s": 0.0,
+      "mass_kg": 723.2,
+      "authority": "observed_numerical_preliminary"
+    },
+    {
+      "event_id": "guidance-01-altitude_transfer",
+      "type": "guidance_phase",
+      "elapsed_s": 767400.0,
+      "mode": "altitude_transfer",
+      "delta_v_m_s": 0.08711302531567212,
+      "mass_kg": 723.1959848674115,
+      "authority": "observed_numerical_preliminary"
+    },
+    {
+      "event_id": "guidance-02-eccentricity_match",
+      "type": "guidance_phase",
+      "elapsed_s": 1097400.0,
+      "mode": "eccentricity_match",
+      "delta_v_m_s": 96.20550974321688,
+      "mass_kg": 718.7793390200546,
+      "authority": "observed_numerical_preliminary"
+    },
+    {
+      "event_id": "guidance-03-plane_trim",
+      "type": "guidance_phase",
+      "elapsed_s": 1236000.0,
+      "mode": "plane_trim",
+      "delta_v_m_s": 136.75148059285237,
+      "mass_kg": 716.9243477641647,
+      "authority": "observed_numerical_preliminary"
+    },
+    {
+      "event_id": "guidance-04-phase_acquisition",
+      "type": "guidance_phase",
+      "elapsed_s": 1290600.0,
+      "mode": "phase_acquisition",
+      "delta_v_m_s": 152.75294737757505,
+      "mass_kg": 716.1935936330566,
+      "authority": "observed_numerical_preliminary"
+    },
+    {
+      "event_id": "guidance-05-complete",
+      "type": "guidance_phase",
+      "elapsed_s": 1407000.0,
+      "mode": "complete",
+      "delta_v_m_s": 186.92053909532837,
+      "mass_kg": 714.6357221887162,
+      "authority": "observed_numerical_preliminary"
+    }
+  ]
+}

@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>SL-8 EP rendezvous trajectory</title>
+    <link rel="stylesheet" href="./src/trajectory.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <header class="topbar">
+        <div class="title-block">
+          <strong>SL-8 EP rendezvous</strong>
+          <span>Launch insertion to proximity handoff</span>
+        </div>
+        <div class="authority"><span></span>Observed numerical · independent hold</div>
+      </header>
+      <section class="workspace">
+        <aside class="left-panel">
+          <div class="panel-heading">Mission phases</div>
+          <div id="phase-list" class="phase-list"></div>
+          <div class="truth-note">
+            <strong>Evidence boundary</strong>
+            <p>Playback begins at assumed orbital insertion and shows the native Cartesian finite-arc execution. Launch ascent is not represented.</p>
+          </div>
+        </aside>
+        <section class="viewer-column">
+          <div class="viewport-wrap">
+            <canvas id="trajectory-view" aria-label="Absolute Earth orbit trajectory viewer"></canvas>
+            <div class="hud">
+              <span id="phase">Loading trajectory</span>
+              <span id="utc">--</span>
+            </div>
+            <div id="labels" aria-hidden="true"></div>
+            <div id="error" role="alert"></div>
+          </div>
+          <div class="playback">
+            <button id="restart" type="button">Restart</button>
+            <button id="play" type="button">Play</button>
+            <span id="elapsed">T+0.00 d</span>
+            <input id="scrub" type="range" min="0" max="1" step="1" value="0" aria-label="Mission elapsed time" />
+            <div class="rates" role="group" aria-label="Playback rate">
+              <button type="button" data-rate="3600">1 h/s</button>
+              <button type="button" data-rate="21600" class="active">6 h/s</button>
+              <button type="button" data-rate="86400">1 d/s</button>
+            </div>
+          </div>
+        </section>
+        <aside class="right-panel">
+          <div class="panel-heading">Guidance state</div>
+          <dl class="metrics">
+            <dt>Mode</dt><dd id="mode">--</dd>
+            <dt>Along-track error</dt><dd id="along-track">--</dd>
+            <dt>Semimajor-axis error</dt><dd id="altitude-error">--</dd>
+            <dt>RAAN error</dt><dd id="raan-error">--</dd>
+            <dt>Plane error</dt><dd id="plane-error">--</dd>
+            <dt>Delta-v delivered</dt><dd id="delta-v">--</dd>
+            <dt>Chaser mass</dt><dd id="mass">--</dd>
+          </dl>
+          <div class="legend">
+            <div><span class="swatch chaser"></span>EP remover</div>
+            <div><span class="swatch target"></span>NORAD 2802</div>
+          </div>
+          <div class="gate-card">
+            <span>RPO handoff gate</span>
+            <strong>20 km trailing</strong>
+            <small>5 km along-track tolerance</small>
+          </div>
+          <div class="truth-note">
+            <strong>Independent check held</strong>
+            <p>The full open-loop GMAT replay missed the target-relative gate. Periodic navigation-state replanning is required before qualification.</p>
+          </div>
+        </aside>
+      </section>
+    </main>
+    <script type="module" src="./src/trajectory.ts"></script>
+  </body>
+</html>

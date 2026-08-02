@@ -15,6 +15,7 @@ export default defineConfig({
         explore: "explore.html",
         viewer: "viewer.html",
         numerics: "numerics.html",
+        trajectory: "trajectory.html",
       },
     },
     chunkSizeWarningLimit: 5000,
