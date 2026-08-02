@@ -1,7 +1,10 @@
 import {
+  BasemapLayer,
   EphemerisSource,
   type LabelHit,
   LabelsLayer,
+  MosaicEarthLayer,
+  parseBasemap,
   parseOem,
   SatellitesLayer,
   Scene,
@@ -37,6 +40,20 @@ interface GuidanceDocument {
   readonly samples: readonly GuidanceSample[];
 }
 
+interface PlotSeries {
+  readonly label: string;
+  readonly color: string;
+  readonly value: (sample: GuidanceSample) => number | undefined;
+}
+
+interface PlotDefinition {
+  readonly id: string;
+  readonly label: string;
+  readonly title: string;
+  readonly unit: string;
+  readonly series: readonly PlotSeries[];
+}
+
 const byId = <T extends HTMLElement>(id: string): T => {
   const value = document.getElementById(id);
   if (!value) throw new Error(`missing element ${id}`);
@@ -53,10 +70,11 @@ async function main(): Promise<void> {
   byId<HTMLElement>(descent ? "descent-tab" : "rendezvous-tab").classList.add("active");
   if (descent) configureDescentCopy();
   try {
-    const [oemResponse, eventResponse, guidanceResponse] = await Promise.all([
+    const [oemResponse, eventResponse, guidanceResponse, basemapResponse] = await Promise.all([
       fetch(`./${stem}.oem`),
       fetch(`./${stem}.events.json`),
       fetch(`./${stem}.guidance.json`),
+      fetch("./basemap-110m.bin"),
     ]);
     if (!oemResponse.ok || !eventResponse.ok || !guidanceResponse.ok) {
       throw new Error("trajectory evidence is unavailable");
@@ -65,6 +83,9 @@ async function main(): Promise<void> {
     const eventsValue = (await eventResponse.json()) as { events: TrajectoryEvent[] };
     const guidance = (await guidanceResponse.json()) as GuidanceDocument;
     const events = [...eventsValue.events].sort((left, right) => left.elapsed_s - right.elapsed_s);
+    const basemap = basemapResponse.ok
+      ? parseBasemap(await basemapResponse.arrayBuffer())
+      : undefined;
 
     const dpr = window.devicePixelRatio || 1;
     const size = (): void => {
@@ -81,6 +102,20 @@ async function main(): Promise<void> {
     scene.clock.loop = false;
     scene.camera.zoom(0.72);
     scene.setGraticule(false);
+    if (basemap) {
+      scene.add(new MosaicEarthLayer({
+        ...(basemap.land ? { land: basemap.land } : {}),
+        facesPerEdge: 56,
+        liftKm: 1,
+      }));
+      scene.add(new BasemapLayer({
+        coastlines: basemap.coastlines,
+        borders: basemap.borders,
+        coastColor: [0.28, 0.46, 0.62, 0.95],
+        borderColor: [0.2, 0.25, 0.28, 0.75],
+      }));
+      scene.setBaseSurface(false);
+    }
     const fleet = new SatellitesLayer({ pointSizePx: 9 });
     fleet.setSource(source);
     const colors = new Float32Array(source.count * 4);
@@ -159,6 +194,11 @@ async function main(): Promise<void> {
         button.classList.add("active");
       };
     });
+    const updatePlotPlayhead = setupTrajectoryPlot(
+      guidance.samples,
+      descent,
+      source.windowSeconds,
+    );
 
     const sampleAt = (time: number): GuidanceSample => {
       let right = guidance.samples.findIndex((sample) => sample.elapsed_s >= time);
@@ -188,6 +228,7 @@ async function main(): Promise<void> {
         : `${sample.plane_error_deg?.toFixed(3) ?? "--"} deg`;
       byId("delta-v").textContent = `${sample.delta_v_m_s.toFixed(1)} m/s`;
       byId("mass").textContent = `${(sample.stack_mass_kg ?? sample.mass_kg).toFixed(1)} kg`;
+      updatePlotPlayhead(time);
       let active = 0;
       events.forEach((event, index) => { if (event.elapsed_s <= time) active = index; });
       phaseButtons.forEach((button, index) => button.classList.toggle("active", index === active));
@@ -199,6 +240,179 @@ async function main(): Promise<void> {
     error.style.display = "flex";
     error.textContent = reason instanceof Error ? reason.message : String(reason);
   }
+}
+
+function setupTrajectoryPlot(
+  samples: readonly GuidanceSample[],
+  descent: boolean,
+  durationS: number,
+): (elapsedS: number) => void {
+  const definitions: readonly PlotDefinition[] = descent
+    ? [
+        {
+          id: "altitude",
+          label: "Orbit altitude",
+          title: "Osculating perigee and apogee",
+          unit: "km altitude",
+          series: [
+            { label: "Perigee", color: "#1769aa", value: (sample) => sample.perigee_altitude_km },
+            { label: "Apogee", color: "#d18417", value: (sample) => sample.apogee_altitude_km },
+          ],
+        },
+        {
+          id: "delta-v",
+          label: "Delta-v",
+          title: "Cumulative electric-propulsion delta-v",
+          unit: "m/s",
+          series: [{ label: "Delivered", color: "#1769aa", value: (sample) => sample.delta_v_m_s }],
+        },
+        {
+          id: "xenon",
+          label: "Xenon",
+          title: "Usable xenon remaining",
+          unit: "kg",
+          series: [{ label: "Remaining", color: "#19766d", value: (sample) => sample.xenon_remaining_kg }],
+        },
+        {
+          id: "battery",
+          label: "Battery",
+          title: "Battery state of charge",
+          unit: "% SOC",
+          series: [{ label: "SOC", color: "#7158a5", value: (sample) => sample.battery_soc == null ? undefined : sample.battery_soc * 100 }],
+        },
+      ]
+    : [
+        {
+          id: "along-track",
+          label: "Along-track",
+          title: "Target-relative along-track error",
+          unit: "km",
+          series: [{ label: "Error", color: "#1769aa", value: (sample) => sample.along_track_error_km }],
+        },
+        {
+          id: "altitude-error",
+          label: "Orbit match",
+          title: "Semimajor-axis difference from target",
+          unit: "km",
+          series: [{ label: "Difference", color: "#d18417", value: (sample) => sample.altitude_error_km }],
+        },
+        {
+          id: "plane",
+          label: "Plane match",
+          title: "Orbital-plane convergence",
+          unit: "deg",
+          series: [
+            { label: "RAAN error", color: "#1769aa", value: (sample) => sample.raan_error_deg == null ? undefined : Math.abs(sample.raan_error_deg) },
+            { label: "Plane error", color: "#d18417", value: (sample) => sample.plane_error_deg },
+          ],
+        },
+        {
+          id: "delta-v",
+          label: "Delta-v",
+          title: "Cumulative rendezvous delta-v",
+          unit: "m/s",
+          series: [{ label: "Delivered", color: "#19766d", value: (sample) => sample.delta_v_m_s }],
+        },
+      ];
+  const options = byId<HTMLElement>("plot-options");
+  const svg = document.getElementById("trajectory-plot") as unknown as SVGSVGElement;
+  let active = definitions[0] as PlotDefinition;
+  let playhead: SVGLineElement | null = null;
+  const buttons = definitions.map((definition) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = definition.label;
+    button.onclick = () => {
+      active = definition;
+      buttons.forEach((item) => item.classList.toggle("active", item === button));
+      playhead = renderPlot(svg, samples, active, durationS);
+    };
+    options.appendChild(button);
+    return button;
+  });
+  buttons[0]?.classList.add("active");
+  playhead = renderPlot(svg, samples, active, durationS);
+  return (elapsedS: number): void => {
+    if (!playhead) return;
+    const x = 62 + Math.max(0, Math.min(1, elapsedS / durationS)) * 836;
+    playhead.setAttribute("x1", x.toFixed(2));
+    playhead.setAttribute("x2", x.toFixed(2));
+  };
+}
+
+function renderPlot(
+  svg: SVGSVGElement,
+  samples: readonly GuidanceSample[],
+  definition: PlotDefinition,
+  durationS: number,
+): SVGLineElement {
+  const ns = "http://www.w3.org/2000/svg";
+  const left = 62;
+  const right = 898;
+  const top = 24;
+  const bottom = 158;
+  svg.replaceChildren();
+  byId("plot-title").textContent = definition.title;
+  const values = definition.series.flatMap((series) =>
+    samples.map(series.value).filter((value): value is number => Number.isFinite(value)),
+  );
+  let minimum = Math.min(...values);
+  let maximum = Math.max(...values);
+  if (!Number.isFinite(minimum) || !Number.isFinite(maximum)) {
+    minimum = 0;
+    maximum = 1;
+  }
+  const padding = Math.max((maximum - minimum) * 0.08, Math.abs(maximum) * 0.01, 0.01);
+  minimum -= padding;
+  maximum += padding;
+  const append = <T extends SVGElement>(tag: string, attributes: Record<string, string>, text?: string): T => {
+    const element = document.createElementNS(ns, tag) as T;
+    Object.entries(attributes).forEach(([key, value]) => element.setAttribute(key, value));
+    if (text != null) element.textContent = text;
+    svg.appendChild(element);
+    return element;
+  };
+  for (let index = 0; index <= 4; index += 1) {
+    const ratio = index / 4;
+    const y = bottom - ratio * (bottom - top);
+    const value = minimum + ratio * (maximum - minimum);
+    append("line", { x1: String(left), x2: String(right), y1: String(y), y2: String(y), class: "plot-grid" });
+    append("text", { x: String(left - 8), y: String(y + 3), "text-anchor": "end", class: "plot-axis" }, formatAxis(value));
+  }
+  for (let index = 0; index <= 4; index += 1) {
+    const ratio = index / 4;
+    const x = left + ratio * (right - left);
+    append("line", { x1: String(x), x2: String(x), y1: String(top), y2: String(bottom), class: "plot-grid" });
+    append("text", { x: String(x), y: "176", "text-anchor": "middle", class: "plot-axis" }, `${(ratio * durationS / 86400).toFixed(1)} d`);
+  }
+  append("text", { x: String(left), y: "12", class: "plot-unit" }, definition.unit);
+  const stride = Math.max(1, Math.floor(samples.length / 900));
+  definition.series.forEach((series, seriesIndex) => {
+    const points: string[] = [];
+    for (let index = 0; index < samples.length; index += stride) {
+      const sample = samples[index] as GuidanceSample;
+      const value = series.value(sample);
+      if (value == null || !Number.isFinite(value)) continue;
+      const x = left + (sample.elapsed_s / durationS) * (right - left);
+      const y = bottom - ((value - minimum) / (maximum - minimum)) * (bottom - top);
+      points.push(`${points.length ? "L" : "M"}${x.toFixed(2)},${y.toFixed(2)}`);
+    }
+    append("path", { d: points.join(" "), stroke: series.color, class: "plot-line" });
+    const legendX = right - definition.series.length * 115 + seriesIndex * 115;
+    append("line", { x1: String(legendX), x2: String(legendX + 18), y1: "12", y2: "12", stroke: series.color, class: "plot-line" });
+    append("text", { x: String(legendX + 24), y: "15", class: "plot-legend" }, series.label);
+  });
+  return append<SVGLineElement>("line", {
+    x1: String(left), x2: String(left), y1: String(top), y2: String(bottom), class: "plot-playhead",
+  });
+}
+
+function formatAxis(value: number): string {
+  const absolute = Math.abs(value);
+  if (absolute >= 1000) return value.toFixed(0);
+  if (absolute >= 100) return value.toFixed(1);
+  if (absolute >= 1) return value.toFixed(2);
+  return value.toFixed(3);
 }
 
 function configureDescentCopy(): void {

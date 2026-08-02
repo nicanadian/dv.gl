@@ -36,7 +36,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid #1769aa; outline-
 .truth-note { margin: 0 14px 16px; padding: 12px; border: 1px solid #e0c99e; border-radius: 4px; background: #fffaf0; }
 .truth-note strong { font-size: 11px; }
 .truth-note p { margin: 6px 0 0; color: #695b45; font-size: 11px; line-height: 1.45; }
-.viewer-column { display: grid; grid-template-rows: minmax(0, 1fr) 60px; min-height: 0; background: #080b10; }
+.viewer-column { display: grid; grid-template-rows: minmax(280px, 1fr) 240px 60px; min-height: 0; background: #080b10; }
 .viewport-wrap { position: relative; min-height: 0; }
 #trajectory-view { display: block; width: 100%; height: 100%; touch-action: none; }
 .hud { position: absolute; top: 14px; left: 14px; display: flex; gap: 8px; pointer-events: none; }
@@ -44,6 +44,24 @@ button:focus-visible, input:focus-visible { outline: 2px solid #1769aa; outline-
 #labels { position: absolute; inset: 0; pointer-events: none; }
 #labels span { position: absolute; color: #f3f6fa; font-size: 11px; font-weight: 650; text-shadow: 0 1px 3px #000; white-space: nowrap; }
 #error { display: none; position: absolute; inset: 20px; align-items: center; justify-content: center; padding: 20px; background: #fff; color: #922; }
+.plot-panel { display: grid; grid-template-rows: 48px minmax(0, 1fr); min-height: 0; border-top: 1px solid #313944; background: #fff; }
+.plot-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 7px 12px 5px 16px; border-bottom: 1px solid #e1e5e9; }
+.plot-toolbar > div:first-child { display: grid; gap: 2px; }
+.plot-toolbar strong { font-size: 12px; }
+.plot-eyebrow { color: #68747f; font-size: 9px; font-weight: 750; text-transform: uppercase; }
+.plot-options { display: flex; min-width: 0; overflow-x: auto; }
+.plot-options button { min-height: 28px; padding: 0 9px; border: 1px solid #cfd7de; border-right-width: 0; border-radius: 0; background: #fff; color: #52606c; cursor: pointer; font-size: 10px; white-space: nowrap; }
+.plot-options button:first-child { border-radius: 3px 0 0 3px; }
+.plot-options button:last-child { border-right-width: 1px; border-radius: 0 3px 3px 0; }
+.plot-options button.active { background: #eaf3fa; color: #1769aa; font-weight: 700; }
+.plot-frame { min-height: 0; padding: 4px 10px 5px; }
+#trajectory-plot { display: block; width: 100%; height: 100%; overflow: visible; }
+.plot-grid { stroke: #dce2e7; stroke-width: 1; }
+.plot-axis { fill: #65717b; font-size: 10px; }
+.plot-unit { fill: #4d5964; font-size: 10px; font-weight: 700; }
+.plot-line { fill: none; stroke-width: 2.2; vector-effect: non-scaling-stroke; }
+.plot-playhead { stroke: #17202a; stroke-width: 1; stroke-dasharray: 4 3; vector-effect: non-scaling-stroke; }
+.plot-legend { fill: #34404b; font-size: 10px; }
 .playback { display: flex; align-items: center; gap: 9px; min-width: 0; padding: 0 12px; border-top: 1px solid #313944; background: #111720; color: #e4eaf0; }
 .playback button { min-height: 32px; border: 1px solid #44505e; border-radius: 3px; background: #1a222d; color: #e4eaf0; cursor: pointer; }
 .playback > button { padding: 0 12px; }
@@ -68,4 +86,8 @@ button:focus-visible, input:focus-visible { outline: 2px solid #1769aa; outline-
 @media (max-width: 980px) {
   .workspace { grid-template-columns: 190px minmax(360px, 1fr); }
   .right-panel { display: none; }
+}
+
+@media (max-height: 760px) {
+  .viewer-column { grid-template-rows: minmax(240px, 1fr) 190px 60px; }
 }

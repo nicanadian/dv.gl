@@ -38,6 +38,18 @@
             <div id="labels" aria-hidden="true"></div>
             <div id="error" role="alert"></div>
           </div>
+          <section class="plot-panel" aria-labelledby="plot-title">
+            <div class="plot-toolbar">
+              <div>
+                <span class="plot-eyebrow">Trajectory evidence</span>
+                <strong id="plot-title">Relative geometry</strong>
+              </div>
+              <div id="plot-options" class="plot-options" role="group" aria-label="Trajectory plot"></div>
+            </div>
+            <div class="plot-frame">
+              <svg id="trajectory-plot" viewBox="0 0 920 190" role="img" aria-labelledby="plot-title"></svg>
+            </div>
+          </section>
           <div class="playback">
             <button id="restart" type="button">Restart</button>
             <button id="play" type="button">Play</button>
