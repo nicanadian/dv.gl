@@ -16,6 +16,11 @@ button:focus-visible, input:focus-visible { outline: 2px solid #1769aa; outline-
 .title-block span { color: #66727e; font-size: 12px; }
 .authority { display: flex; align-items: center; gap: 7px; color: #596672; font-size: 11px; font-weight: 700; text-transform: uppercase; }
 .authority span { width: 8px; height: 8px; border-radius: 50%; background: #d38a18; }
+.authority #authority-text { width: auto; height: auto; border-radius: 0; background: transparent; }
+.trajectory-tabs { display: flex; align-self: stretch; }
+.trajectory-tabs a { display: flex; align-items: center; padding: 0 14px; border-bottom: 2px solid transparent; color: #52606c; font-size: 12px; font-weight: 650; text-decoration: none; }
+.trajectory-tabs a:hover { background: #f5f8fa; }
+.trajectory-tabs a.active { border-bottom-color: #1769aa; color: #1769aa; }
 .workspace { display: grid; grid-template-columns: 238px minmax(480px, 1fr) 270px; min-height: 0; }
 .left-panel, .right-panel { overflow-y: auto; background: #fff; }
 .left-panel { border-right: 1px solid #d7dde3; }
