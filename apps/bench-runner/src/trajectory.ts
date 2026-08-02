@@ -53,7 +53,7 @@ async function main(): Promise<void> {
     const source = new EphemerisSource(parseOem(await oemResponse.text()).segments);
     const eventsValue = (await eventResponse.json()) as { events: TrajectoryEvent[] };
     const guidance = (await guidanceResponse.json()) as GuidanceDocument;
-    const events = eventsValue.events.filter((item) => item.type === "guidance_phase");
+    const events = [...eventsValue.events].sort((left, right) => left.elapsed_s - right.elapsed_s);
 
     const dpr = window.devicePixelRatio || 1;
     const size = (): void => {
