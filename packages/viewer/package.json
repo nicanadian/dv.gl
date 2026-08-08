@@ -35,6 +35,6 @@
     "@dvgl/orbits": "workspace:*",
     "@dvgl/webgpu": "workspace:*",
     "@webgpu/types": "^0.1.44",
-    "tsup": "8.5.0"
+    "tsup": "8.5.1"
   }
 }
