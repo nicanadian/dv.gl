@@ -23,6 +23,6 @@
     "@dvgl/frames": "workspace:*"
   },
   "devDependencies": {
-    "@webgpu/types": "^0.1.44"
+    "@webgpu/types": "^0.1.72"
   }
 }
